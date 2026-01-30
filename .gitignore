@@ -1,0 +1,17 @@
+# Build output
+build/
+
+# KAS cloned repositories
+poky/
+sources/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
