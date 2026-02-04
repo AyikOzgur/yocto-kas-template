@@ -13,6 +13,12 @@ repos:
       meta-poky: null
       meta-yocto-bsp: null
 
+  custom-layer:
+    url: https://github.com/AyikOzgur/meta-custom
+    path: sources/custom-layer
+    branch: main
+
+
 local_conf_header:
   base: |
     DL_DIR = "/home/ozgur/yocto-shared/dl"
