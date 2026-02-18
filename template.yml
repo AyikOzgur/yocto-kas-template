@@ -1,7 +1,8 @@
 header:
   version: 14
 
-machine: qemux86-64
+machine: orange-pi-zero2
+target: core-image-minimal
 
 repos:
   poky:
@@ -17,6 +18,27 @@ repos:
     url: https://github.com/AyikOzgur/meta-custom
     path: sources/custom-layer
     branch: main
+
+  meta-openembedded:
+    url: https://github.com/openembedded/meta-openembedded.git
+    path: sources/meta-openembedded
+    branch: kirkstone
+    layers:
+      meta-oe:
+      meta-python:
+
+  meta-arm:
+    url: https://git.yoctoproject.org/meta-arm
+    path: sources/meta-arm
+    branch: kirkstone
+    layers:
+      meta-arm:
+      meta-arm-toolchain:
+
+  sunxi:
+    url: https://github.com/linux-sunxi/meta-sunxi.git
+    path: sources/sunxi
+    branch: kirkstone
 
 
 local_conf_header:
