@@ -10,9 +10,9 @@ repos:
     path: sources/poky
     branch: kirkstone
     layers:
-      meta: null
-      meta-poky: null
-      meta-yocto-bsp: null
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
 
   custom-layer:
     url: https://github.com/AyikOzgur/meta-custom
@@ -39,7 +39,6 @@ repos:
     url: https://github.com/linux-sunxi/meta-sunxi.git
     path: sources/sunxi
     branch: kirkstone
-
 
 local_conf_header:
   base: |
