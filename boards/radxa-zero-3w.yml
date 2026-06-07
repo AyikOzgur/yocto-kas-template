@@ -2,7 +2,7 @@ header:
   version: 14
 
 machine: radxa-zero-3w
-target: core-image-minimal
+target: core-image-base
 
 repos:
   poky:
@@ -43,3 +43,5 @@ local_conf_header:
     DL_DIR = "/home/ozgur/yocto-shared/dl"
     SSTATE_DIR = "/home/ozgur/yocto-shared/sstate-cache"
     IMAGE_FEATURES += "debug-tweaks"
+    PACKAGE_CLASSES = "package_rpm"
+    EXTRA_IMAGE_FEATURES += "package-management"
