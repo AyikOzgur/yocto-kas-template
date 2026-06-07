@@ -2,8 +2,10 @@
 build/
 
 # KAS cloned repositories
-poky/
-sources/
+sources/poky/
+sources/meta-arm
+sources/meta-openembedded
+sources/meta-rockchip
 
 # Editor files
 *.swp
@@ -15,3 +17,5 @@ sources/
 # OS files
 .DS_Store
 Thumbs.db
+
+.kas_shell_history
