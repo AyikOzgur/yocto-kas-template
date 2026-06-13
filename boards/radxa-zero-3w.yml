@@ -45,3 +45,4 @@ local_conf_header:
     IMAGE_FEATURES += "debug-tweaks"
     PACKAGE_CLASSES = "package_rpm"
     EXTRA_IMAGE_FEATURES += "package-management"
+    IMAGE_INSTALL:append = " htop"
