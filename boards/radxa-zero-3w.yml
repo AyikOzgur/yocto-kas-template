@@ -50,3 +50,4 @@ local_conf_header:
     EXTRA_IMAGE_FEATURES += "package-management"
     DISTRO = "mydistro"
     IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant"
+    IMAGE_FEATURES += "ssh-server-openssh"
