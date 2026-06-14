@@ -1,0 +1,18 @@
+/*
+ * Device tree fragment for Radxa Zero 3w Wi-Fi
+ */
+
+&sdmmc1 {
+    status = "okay";
+    supports-sdio;
+    bus-width = <4>;
+    cap-sd-highspeed;
+    cap-sdio-irq;
+    keep-power-in-suspend;
+    non-removable;
+    mmc-pwrseq = <&sdio_pwrseq>;
+};
+
+&sdio_pwrseq {
+    reset-gpios = <&gpio3 16 1>; /* GPIO_ACTIVE_LOW */
+};

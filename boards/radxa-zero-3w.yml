@@ -21,6 +21,7 @@ repos:
     layers:
       meta-oe:
       meta-python:
+      meta-networking:
 
   meta-arm:
     url: https://git.yoctoproject.org/meta-arm
@@ -48,3 +49,4 @@ local_conf_header:
     IMAGE_FEATURES += "debug-tweaks"
     EXTRA_IMAGE_FEATURES += "package-management"
     DISTRO = "mydistro"
+    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant"
