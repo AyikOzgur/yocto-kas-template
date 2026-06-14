@@ -2,7 +2,7 @@ header:
   version: 14
 
 machine: radxa-zero-3w
-target: core-image-base
+target: core-image-full-cmdline
 
 repos:
   poky:
@@ -35,8 +35,8 @@ repos:
     path: sources/meta-rockchip
     branch: scarthgap
 
-  meta-template:
-    path: sources/meta-template
+  meta-bsptemplate:
+    path: sources/meta-bsptemplate
 
 local_conf_header:
   base: |
@@ -45,4 +45,4 @@ local_conf_header:
     IMAGE_FEATURES += "debug-tweaks"
     PACKAGE_CLASSES = "package_rpm"
     EXTRA_IMAGE_FEATURES += "package-management"
-    IMAGE_INSTALL:append = " htop"
+    IMAGE_INSTALL:append = " htop btop"
