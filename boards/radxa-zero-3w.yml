@@ -2,7 +2,7 @@ header:
   version: 14
 
 machine: radxa-zero-3w
-target: core-image-full-cmdline
+target: my-core-image
 
 repos:
   poky:
@@ -38,11 +38,13 @@ repos:
   meta-bsptemplate:
     path: sources/meta-bsptemplate
 
+  meta-distrotemplate:
+    path: sources/meta-distrotemplate
+
 local_conf_header:
   base: |
     DL_DIR = "/home/ozgur/yocto-shared/dl"
     SSTATE_DIR = "/home/ozgur/yocto-shared/sstate-cache"
     IMAGE_FEATURES += "debug-tweaks"
-    PACKAGE_CLASSES = "package_rpm"
     EXTRA_IMAGE_FEATURES += "package-management"
-    IMAGE_INSTALL:append = " htop btop"
+    DISTRO = "mydistro"
