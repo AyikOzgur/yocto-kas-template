@@ -49,5 +49,5 @@ local_conf_header:
     IMAGE_FEATURES += "debug-tweaks"
     EXTRA_IMAGE_FEATURES += "package-management"
     DISTRO = "mydistro"
-    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant"
+    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect"
     IMAGE_FEATURES += "ssh-server-openssh"
