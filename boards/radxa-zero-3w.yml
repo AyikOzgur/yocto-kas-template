@@ -44,8 +44,7 @@ repos:
 
 local_conf_header:
   base: |
-    DL_DIR = "/home/ozgur/yocto-shared/dl"
-    SSTATE_DIR = "/home/ozgur/yocto-shared/sstate-cache"
+    BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR"
     IMAGE_FEATURES += "debug-tweaks"
     EXTRA_IMAGE_FEATURES += "package-management"
     DISTRO = "mydistro"
