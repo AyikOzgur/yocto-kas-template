@@ -45,8 +45,6 @@ repos:
 local_conf_header:
   base: |
     BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR"
-    IMAGE_FEATURES += "debug-tweaks"
-    EXTRA_IMAGE_FEATURES += "package-management"
     DISTRO = "mydistro"
     IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect"
-    IMAGE_FEATURES += "ssh-server-openssh"
+    IMAGE_FEATURES += "ssh-server-openssh debug-tweaks"
