@@ -42,9 +42,13 @@ repos:
   meta-distrotemplate:
     path: sources/meta-distrotemplate
 
+env:
+  WIFI_NAME: null
+  WIFI_PASSWD: null
+
 local_conf_header:
   base: |
-    BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR"
+    BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR WIFI_NAME WIFI_PASSWD"
     DISTRO = "mydistro"
     IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect"
     IMAGE_FEATURES += "ssh-server-openssh debug-tweaks"
