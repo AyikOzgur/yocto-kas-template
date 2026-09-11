@@ -6,6 +6,7 @@ sources/poky/
 sources/meta-arm
 sources/meta-openembedded
 sources/meta-rockchip
+sources/meta-swupdate
 
 # Editor files
 *.swp

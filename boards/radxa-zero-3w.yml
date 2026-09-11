@@ -42,6 +42,11 @@ repos:
   meta-distrotemplate:
     path: sources/meta-distrotemplate
 
+  meta-swupdate:
+    url: https://github.com/sbabic/meta-swupdate
+    path: sources/meta-swupdate
+    branch: scarthgap
+
 env:
   WIFI_NAME: null
   WIFI_PASSWD: null
@@ -50,5 +55,6 @@ local_conf_header:
   base: |
     BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR WIFI_NAME WIFI_PASSWD"
     DISTRO = "mydistro"
-    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect"
+    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect swupdate"
+    MACHINE_FEATURES:append = " rk-u-boot-env"
     IMAGE_FEATURES += "ssh-server-openssh debug-tweaks"
