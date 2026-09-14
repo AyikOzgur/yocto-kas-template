@@ -1,0 +1,38 @@
+software = {
+    version = "@@DISTRO_VERSION@@";
+    hardware-compatibility: [ "0.0.1" ];
+    reboot = true;
+
+    stable = {
+        /* running A, write B, then boot B */
+        slot-a: {
+            images: (
+                {
+                    filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
+                    device = "/dev/mmcblk1p11";
+                    type = "raw";
+                    compressed = "zlib";
+                    sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
+                }
+            );
+            bootenv: (
+                { name = "pxe_label_override"; value = "slot-b"; }
+            );
+        };
+        /* running B, write A, then boot A */
+        slot-b: {
+            images: (
+                {
+                    filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
+                    device = "/dev/mmcblk1p10";
+                    type = "raw";
+                    compressed = "zlib";
+                    sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
+                }
+            );
+            bootenv: (
+                { name = "pxe_label_override"; value = "slot-a"; }
+            );
+        };
+    };
+};
