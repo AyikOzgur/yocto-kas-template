@@ -3,36 +3,90 @@ software = {
     hardware-compatibility: [ "0.0.1" ];
     reboot = true;
 
-    stable = {
-        /* running A, write B, then boot B */
-        slot-a: {
-            images: (
-                {
-                    filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
-                    device = "/dev/mmcblk1p11";
-                    type = "raw";
-                    compressed = "zlib";
-                    sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
-                }
-            );
-            bootenv: (
-                { name = "pxe_label_override"; value = "slot-b"; }
-            );
-        };
-        /* running B, write A, then boot A */
-        slot-b: {
-            images: (
-                {
-                    filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
-                    device = "/dev/mmcblk1p10";
-                    type = "raw";
-                    compressed = "zlib";
-                    sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
-                }
-            );
-            bootenv: (
-                { name = "pxe_label_override"; value = "slot-a"; }
-            );
-        };
-    };
+    embedded-script = "
+        require ('swupdate')
+
+        local slot_a = {
+            name = \"slot-a\",
+            device = \"/dev/mmcblk1p10\"
+        }
+
+        local slot_b = {
+            name = \"slot-b\",
+            device = \"/dev/mmcblk1p11\"
+        }
+
+        local bootlimit = \"2\"
+
+        local altbootcmd =
+            \"setenv last_upgrade_failed 1; \" ..
+            \"setenv last_failed_slot ${pxe_label_override}; \" ..
+            \"setenv pxe_label_override ${rollback_slot}; \" ..
+            \"setenv bootcount 0; \" ..
+            \"setenv upgrade_available 0; \" ..
+            \"saveenv; \" ..
+            \"run bootcmd\"
+
+        function configure_ab(candidate, rollback, image)
+            image.device = candidate.device
+
+            swupdate.set_bootenv(\"pxe_label_override\", candidate.name)
+            swupdate.set_bootenv(\"rollback_slot\", rollback.name)
+            swupdate.set_bootenv(\"bootlimit\", bootlimit)
+            swupdate.set_bootenv(\"bootcount\", \"0\")
+            swupdate.set_bootenv(\"upgrade_available\", \"1\")
+            swupdate.set_bootenv(\"last_upgrade_failed\", \"0\")
+            swupdate.set_bootenv(\"last_failed_slot\", \"none\")
+            swupdate.set_bootenv(\"altbootcmd\", altbootcmd)
+
+            swupdate.info(
+                \"A/B update: candidate=\" ..
+                candidate.name ..
+                \", rollback=\" ..
+                rollback.name ..
+                \", device=\" ..
+                candidate.device ..
+                \", bootlimit=\" ..
+                bootlimit
+            )
+
+            return true, image
+        end
+
+        function select_inactive(image)
+            local root = swupdate.getroot()
+
+            if root == nil then
+                swupdate.error(\"Cannot determine current root filesystem\")
+                return false, nil
+            end
+
+            swupdate.info(
+                \"Current root device: \" .. tostring(root.path)
+            )
+
+            if root.path == slot_a.device then
+                return configure_ab(slot_b, slot_a, image)
+
+            elseif root.path == slot_b.device then
+                return configure_ab(slot_a, slot_b, image)
+
+            else
+                swupdate.error(
+                    \"Unknown root filesystem: \" .. tostring(root.path)
+                )
+                return false, nil
+            end
+        end
+    ";
+
+    images: (
+        {
+            filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
+            type = "raw";
+            compressed = "zlib";
+            sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
+            hook = "select_inactive";
+        }
+    );
 };

@@ -1,0 +1,10 @@
+[Unit]
+Description=Update status checking service
+
+[Service]
+Type=oneshot
+ExecStart=@@BINDIR@@/update-status.py
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
