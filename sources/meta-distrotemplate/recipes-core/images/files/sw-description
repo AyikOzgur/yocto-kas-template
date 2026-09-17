@@ -8,12 +8,14 @@ software = {
 
         local slot_a = {
             name = \"slot-a\",
-            device = \"/dev/mmcblk1p10\"
+            device = \"/dev/mmcblk1p10\",
+            kernel = \"/boot/fitImageA\"
         }
 
         local slot_b = {
             name = \"slot-b\",
-            device = \"/dev/mmcblk1p11\"
+            device = \"/dev/mmcblk1p11\",
+            kernel = \"/boot/fitImageB\"
         }
 
         local bootlimit = \"2\"
@@ -53,7 +55,8 @@ software = {
             return true, image
         end
 
-        function select_inactive(image)
+        function select_inactive_rootfs(image)
+
             local root = swupdate.getroot()
 
             if root == nil then
@@ -78,6 +81,35 @@ software = {
                 return false, nil
             end
         end
+
+        function select_inactive_kernel(file)
+
+            local root = swupdate.getroot()
+
+            if root == nil then
+                swupdate.error(\"Cannot determine current root filesystem\")
+                return false, nil
+            end
+
+            swupdate.info(
+                \"Current root device: \" .. tostring(root.path)
+            )
+
+            if root.path == slot_a.device then
+                file.path = slot_b.kernel
+                return true, file
+
+            elseif root.path == slot_b.device then
+                file.path = slot_a.kernel
+                return true, file
+
+            else
+                swupdate.error(
+                    \"Unknown root filesystem: \" .. tostring(root.path)
+                )
+                return false, nil
+            end
+        end
     ";
 
     images: (
@@ -86,7 +118,14 @@ software = {
             type = "raw";
             compressed = "zlib";
             sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
-            hook = "select_inactive";
+            hook = "select_inactive_rootfs";
+        },
+        {
+            filename = "fitImage";
+            type = "rawfile";
+            path = "/boot/fitImage";
+            sha256 = "$swupdate_get_sha256(fitImage)";
+            hook = "select_inactive_kernel";
         }
     );
 };
