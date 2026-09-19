@@ -1,0 +1,60 @@
+header:
+  version: 14
+
+machine: radxa-zero-3w
+target: my-core-image
+
+repos:
+  poky:
+    url: https://git.yoctoproject.org/git/poky
+    path: sources/poky
+    branch: scarthgap
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: https://github.com/openembedded/meta-openembedded.git
+    path: sources/meta-openembedded
+    branch: scarthgap
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+
+  meta-arm:
+    url: https://git.yoctoproject.org/meta-arm
+    path: sources/meta-arm
+    branch: scarthgap
+    layers:
+      meta-arm:
+      meta-arm-toolchain:
+
+  rockcip:
+    url: https://git.yoctoproject.org/meta-rockchip
+    path: sources/meta-rockchip
+    branch: scarthgap
+
+  meta-bsptemplate:
+    path: sources/meta-bsptemplate
+
+  meta-distrotemplate:
+    path: sources/meta-distrotemplate
+
+  meta-swupdate:
+    url: https://github.com/sbabic/meta-swupdate
+    path: sources/meta-swupdate
+    branch: scarthgap
+
+env:
+  WIFI_NAME: null
+  WIFI_PASSWD: null
+
+local_conf_header:
+  base: |
+    BB_ENV_PASSTHROUGH_ADDITIONS += "DL_DIR SSTATE_DIR WIFI_NAME WIFI_PASSWD"
+    DISTRO = "mydistro"
+    IMAGE_INSTALL:append = " aic8800-driver wpa-supplicant wifi-connect swupdate"
+    MACHINE_FEATURES:append = " rk-u-boot-env"
+    IMAGE_FEATURES += "ssh-server-openssh debug-tweaks"

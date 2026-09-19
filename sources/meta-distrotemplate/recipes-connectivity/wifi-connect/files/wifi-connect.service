@@ -1,0 +1,11 @@
+[Unit]
+Description=Wifi connection service
+
+[Service]
+Type=oneshot
+ExecStart=@@BINDIR@@/wifi-connect.sh
+ExecStartPre=/bin/sh -c 'until ip link show wlan0 >/dev/null 2>&1; do sleep 1; done'
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
