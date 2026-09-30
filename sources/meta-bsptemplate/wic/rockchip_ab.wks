@@ -27,7 +27,8 @@ part reserved2 --offset 8192s  --fixed-size 4096K --fstype=none --part-name rese
 part loader2   --offset 16384s --fixed-size 4096K --fstype=none --part-name loader2   --source rawcopy --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
 part atf       --offset 24576s --fixed-size 4096K --fstype=none --part-name atf
 part /boot --fixed-size 128M --source bootimg-partition --fstype=vfat --label boot --align 4096 --ondisk mmcblk1 --active
-part /         --label rootfsA  --active --fixed-size 1024M --fstype=ext4 --part-name rootfsA   --source rootfs  --part-type ${ROOT_DPS}
-part rootfsB   --label rootfsB  --fixed-size 1024M --fstype=ext4 --part-name rootfsB   --source rootfs  --part-type ${ROOT_DPS}
+part /         --label rootfsA  --active --fixed-size 512M --fstype=ext4 --part-name rootfsA   --source rootfs  --part-type ${ROOT_DPS}
+part rootfsB   --label rootfsB  --active --fixed-size 512M --fstype=ext4 --part-name rootfsB   --source rootfs  --part-type ${ROOT_DPS}
+part /var --label data --fixed-size 512M --fstype=ext4 --part-name data --ondisk mmcblk1 --align 4096 --active
 
 bootloader --ptable gpt
