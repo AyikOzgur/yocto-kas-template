@@ -22,13 +22,14 @@ part loader1   --offset 64s    --fixed-size 3552K --fstype=none --part-name load
 part v_storage --offset 7168s  --fixed-size 256K  --fstype=none --part-name v_storage
 part reserved  --offset 7680s  --fixed-size 192K  --fstype=none --part-name reserved
 part reserved1 --offset 8064s  --fixed-size 32K   --fstype=none --part-name reserved1
-part uboot_env --offset 8128s  --fixed-size 32K   --fstype=none --part-name uboot_env ${RK_UBOOT_ENV}
+part uboot_env --offset 8128s  --fixed-size 32K   --fstype=none --part-name uboot_env --source rawcopy --sourceparams="file=${IMGDEPLOYDIR}/${IMAGE_LINK_NAME}.u-boot.env"
 part reserved2 --offset 8192s  --fixed-size 4096K --fstype=none --part-name reserved2
 part loader2   --offset 16384s --fixed-size 4096K --fstype=none --part-name loader2   --source rawcopy --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
 part atf       --offset 24576s --fixed-size 4096K --fstype=none --part-name atf
 part /boot --fixed-size 128M --source bootimg-partition --fstype=vfat --label boot --align 4096 --ondisk mmcblk1 --active
-part /         --label rootfsA  --active --fixed-size 512M --fstype=ext4 --part-name rootfsA   --source rootfs  --part-type ${ROOT_DPS}
-part rootfsB   --label rootfsB  --active --fixed-size 512M --fstype=ext4 --part-name rootfsB   --source rootfs  --part-type ${ROOT_DPS}
+# No --label on the root slots: wic would run tune2fs on the hashed image.
+part /         --active --fixed-size 512M --fstype=ext4 --part-name rootfsA   --source rawcopy --sourceparams="file=${IMGDEPLOYDIR}/${IMAGE_LINK_NAME}.ext4.verity" --part-type ${ROOT_DPS}
+part rootfsB   --active --fixed-size 512M --fstype=ext4 --part-name rootfsB   --source rawcopy --sourceparams="file=${IMGDEPLOYDIR}/${IMAGE_LINK_NAME}.ext4.verity" --part-type ${ROOT_DPS}
 part /var --label data --fixed-size 512M --fstype=ext4 --part-name data --ondisk mmcblk1 --align 4096 --active
 
 bootloader --ptable gpt

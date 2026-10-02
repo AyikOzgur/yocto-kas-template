@@ -9,13 +9,17 @@ software = {
         local slot_a = {
             name = \"slot-a\",
             device = \"/dev/mmcblk1p10\",
-            kernel = \"/boot/fitImageA\"
+            kernel = \"/boot/fitImageA\",
+            verity_sectors = \"verity_sectors_a\",
+            verity_args = \"verity_args_a\"
         }
 
         local slot_b = {
             name = \"slot-b\",
             device = \"/dev/mmcblk1p11\",
-            kernel = \"/boot/fitImageB\"
+            kernel = \"/boot/fitImageB\",
+            verity_sectors = \"verity_sectors_b\",
+            verity_args = \"verity_args_b\"
         }
 
         local bootlimit = \"2\"
@@ -32,6 +36,8 @@ software = {
         function configure_ab(candidate, rollback, image)
             image.device = candidate.device
 
+            swupdate.set_bootenv(candidate.verity_sectors, \"@@VERITY_DATA_SECTORS@@\")
+            swupdate.set_bootenv(candidate.verity_args, \"@@VERITY_TABLE_ARGS@@\")
             swupdate.set_bootenv(\"pxe_label_override\", candidate.name)
             swupdate.set_bootenv(\"rollback_slot\", rollback.name)
             swupdate.set_bootenv(\"bootlimit\", bootlimit)
@@ -114,10 +120,10 @@ software = {
 
     images: (
         {
-            filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz";
+            filename = "@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.verity.gz";
             type = "raw";
             compressed = "zlib";
-            sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.gz)";
+            sha256 = "$swupdate_get_sha256(@@IMAGE_BASENAME@@-@@MACHINE@@@@IMAGE_NAME_SUFFIX@@.ext4.verity.gz)";
             hook = "select_inactive_rootfs";
         },
         {
