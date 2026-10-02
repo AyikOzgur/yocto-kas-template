@@ -3,7 +3,8 @@ SRCREV = "8e7c1c539395e34648d859c20b0f9478eb5901cc"
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-SRC_URI += "file://radxa-zero-3w-wifi.dtsi"
+SRC_URI += "file://radxa-zero-3w-wifi.dtsi\
+            file://dm-verity.cfg"
 
 do_configure:append() {
     # Append the Wi-Fi configuration to the main device tree
