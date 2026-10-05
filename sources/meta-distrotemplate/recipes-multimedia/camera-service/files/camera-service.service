@@ -1,0 +1,10 @@
+[Unit]
+Description=Camera capture service
+
+[Service]
+ExecStart=@@BINDIR@@/camera-service --video @@VIDEO_DEVICE@@ --dma-heap /dev/dma_heap/system
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

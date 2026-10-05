@@ -1,0 +1,16 @@
+[Unit]
+Description=Frame preprocessing service
+After=camera-service.service
+Wants=camera-service.service
+
+[Service]
+# panvk is not enabled by default on Mali-G52 (Bifrost).
+Environment=PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1
+# Keep GPU at highest frequency, devfreq scaling doubles processing time.
+ExecStartPre=/bin/sh -c 'cat /sys/class/devfreq/fde60000.gpu/max_freq > /sys/class/devfreq/fde60000.gpu/min_freq'
+ExecStart=@@BINDIR@@/preprocessing-service --gpu /dev/dri/renderD128 --dma-heap /dev/dma_heap/system
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
