@@ -1,0 +1,14 @@
+[Unit]
+Description=Detection overlay renderer (test)
+After=camera-service.service inference-service.service
+Wants=camera-service.service
+
+[Service]
+# panvk is not enabled by default on Mali-G52 (Bifrost).
+Environment=PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1
+ExecStart=@@BINDIR@@/renderer-service --gpu /dev/dri/by-path/platform-fde60000.gpu-render
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

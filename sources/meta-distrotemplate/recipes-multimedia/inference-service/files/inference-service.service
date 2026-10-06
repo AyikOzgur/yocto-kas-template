@@ -4,10 +4,16 @@ After=preprocessing-service.service
 Wants=preprocessing-service.service
 
 [Service]
+Environment=INFERENCE_MODEL=@@DATADIR@@/inference-service/yolov8n.rknn
+Environment=INFERENCE_CONF=@@INFERENCE_CONF@@
+# Override without rebuilding (persistent data partition), e.g.:
+#   echo INFERENCE_CONF=0.5 > /var/inference-service.env
+#   echo INFERENCE_MODEL=@@DATADIR@@/inference-service/yolov5s.rknn >> /var/inference-service.env
+EnvironmentFile=-/var/inference-service.env
 # Keep NPU at highest frequency. The rknpu port's ondemand governor never
 # ramps up (stays at the 594 MHz boot rate), devfreq clamps to min_freq.
 ExecStartPre=/bin/sh -c 'cat /sys/class/devfreq/fde40000.npu/max_freq > /sys/class/devfreq/fde40000.npu/min_freq'
-ExecStart=@@BINDIR@@/inference-service @@DATADIR@@/inference-service/yolov8n.rknn
+ExecStart=@@BINDIR@@/inference-service ${INFERENCE_MODEL} --conf ${INFERENCE_CONF}
 Restart=always
 RestartSec=2
 

@@ -1,0 +1,48 @@
+#version 450
+
+// Copies a YUYV frame and draws rectangle outlines on it.
+// Each invocation handles one YUYV word = 2 pixels (Y0 U Y1 V).
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuffer { uint data[]; } in_buf;
+layout(std430, binding = 1) writeonly buffer OutputBuffer { uint data[]; } out_buf;
+// x0, y0, x1, y1 with x1/y1 exclusive, in pixels.
+layout(std430, binding = 2) readonly buffer Rectangles { ivec4 rects[]; } r;
+
+// Must match PushConstants in Renderer.cpp
+layout(push_constant) uniform Params {
+    int width;
+    int height;
+    int in_stride;
+    int out_stride;
+    int rect_count;
+    int thickness;
+} p;
+
+// Green, BT.601 limited range, packed as Y0 U Y1 V.
+const uint LINE_COLOR = 145u | (54u << 8) | (145u << 16) | (34u << 24);
+
+bool on_outline(int x, int y) {
+    for (int i = 0; i < p.rect_count; i++) {
+        ivec4 b = r.rects[i];
+        if (x < b.x || y < b.y || x >= b.z || y >= b.w)
+            continue;
+        if (x < b.x + p.thickness || x >= b.z - p.thickness ||
+            y < b.y + p.thickness || y >= b.w - p.thickness)
+            return true;
+    }
+    return false;
+}
+
+void main() {
+    int gx = int(gl_GlobalInvocationID.x);
+    int y = int(gl_GlobalInvocationID.y);
+    if (gx * 2 >= p.width || y >= p.height)
+        return;
+
+    uint word = in_buf.data[(y * p.in_stride) / 4 + gx];
+    // Chroma is shared by the pixel pair, so color both if either is on a line.
+    if (on_outline(gx * 2, y) || on_outline(gx * 2 + 1, y))
+        word = LINE_COLOR;
+    out_buf.data[(y * p.out_stride) / 4 + gx] = word;
+}

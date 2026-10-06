@@ -1,10 +1,15 @@
 DESCRIPTION = "NPU inference test service, runs YOLO on preprocessing-service frames"
 LICENSE = "CLOSED"
 
+# Headers shared with renderer-service / streamer-service.
+FILESEXTRAPATHS:prepend := "${THISDIR}/../pipeline-common:"
+
 # RK3566 models from Q-engineering YoloV5-NPU / YoloV8-NPU (BSD-3-Clause).
 # The service runs yolov8n; yolov5s is kept for comparison.
 SRC_URI = "file://inference-service.cpp \
            file://inference-service.service \
+           file://FrameHeader.h \
+           file://Detections.h \
            https://raw.githubusercontent.com/Qengineering/YoloV5-NPU/main/rk3566/yolov5s.rknn;name=yolov5s \
            https://raw.githubusercontent.com/Qengineering/YoloV8-NPU/main/rk3566/yolov8n.rknn;name=yolov8n \
 "
@@ -14,6 +19,10 @@ SRC_URI[yolov8n.sha256sum] = "953dae6fcfd21d10f864d8c552f20c3f91ce51f795b0d604c8
 S = "${WORKDIR}"
 
 DEPENDS = "librknnrt"
+
+# Default detection confidence threshold, can be overridden from local.conf / kas,
+# or at runtime with /var/inference-service.env (see the unit file).
+INFERENCE_CONF ?= "0.45"
 
 inherit systemd
 
@@ -32,6 +41,7 @@ do_install() {
     sed -i \
     -e 's|@@BINDIR@@|${bindir}|g' \
     -e 's|@@DATADIR@@|${datadir}|g' \
+    -e 's|@@INFERENCE_CONF@@|${INFERENCE_CONF}|g' \
     ${D}${systemd_unitdir}/system/inference-service.service
 }
 

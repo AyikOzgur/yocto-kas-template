@@ -2,7 +2,8 @@
 //
 // Receives 640x640 RGB24 letterboxed frames as dma-buf fds over a unix
 // socket, runs YOLO on the NPU with zero-copy input and prints FPS,
-// timings and detections once per second.
+// timings and detections once per second. Detections of every frame are
+// published on DETECTIONS_SOCKET_PATH (see Detections.h).
 //
 // Supported models (rknn_model_zoo exports, picked by output count):
 // - YOLOv5: 3 outputs, anchor heads [1, 3*85, h, w]
@@ -22,6 +23,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -38,21 +40,15 @@
 
 #include <rknn_api.h>
 
-// Must match FrameHeader in preprocessing-service.
-struct __attribute__((packed)) FrameHeader {
-    uint64_t frameId;
-    uint32_t width;
-    uint32_t height;
-    uint32_t stride;
-    uint32_t length;
-    uint8_t index;
-};
-static_assert(sizeof(FrameHeader) == 25, "FrameHeader must be 25 bytes");
+#include "Detections.h"
+#include "FrameHeader.h"
 
 static const char *SOCKET_PATH = "/run/preprocessing-service.sock";
 static const char *MODEL_PATH = "/usr/share/inference-service/yolov8n.rknn";
 
-static const float BOX_THRESH = 0.25f;
+// Minimum detection confidence. YOLO's usual 0.25 shows too many false detections
+// on the analog camera; tune with --conf.
+static const float DEFAULT_CONF_THRESH = 0.45f;
 static const float NMS_THRESH = 0.45f;
 static const int NUM_CLASSES = 80;
 static const int PROP_SIZE = 5 + NUM_CLASSES;
@@ -158,12 +154,12 @@ static float dequantize(int8_t q, const rknn_tensor_attr &attr) {
 
 // Decode one YOLOv5 head: int8 NCHW [1, 3*85, gh, gw], sigmoid already applied in the model.
 static void decode_v5_head(const int8_t *out, const rknn_tensor_attr &attr, int head,
-                           int in_w, int in_h, std::vector<Detection> &dets) {
+                           int in_w, int in_h, float conf, std::vector<Detection> &dets) {
     const int stride = STRIDES[head];
     const int gw = in_w / stride, gh = in_h / stride, grid = gw * gh;
     auto deq = [&](int8_t q) { return dequantize(q, attr); };
 
-    const int8_t thresh_q = quantize(BOX_THRESH, attr);
+    const int8_t thresh_q = quantize(conf, attr);
 
     for (int a = 0; a < 3; a++) {
         for (int y = 0; y < gh; y++) {
@@ -177,7 +173,7 @@ static void decode_v5_head(const int8_t *out, const rknn_tensor_attr &attr, int 
                     if (p[(5 + k) * grid] > p[(5 + best) * grid])
                         best = k;
                 float score = deq(p[4 * grid]) * deq(p[(5 + best) * grid]);
-                if (score < BOX_THRESH)
+                if (score < conf)
                     continue;
 
                 float bx = (deq(p[0]) * 2.f - 0.5f + x) * stride;
@@ -197,12 +193,13 @@ static void decode_v5_head(const int8_t *out, const rknn_tensor_attr &attr, int 
 static void decode_v8_head(const int8_t *box, const rknn_tensor_attr &box_attr,
                            const int8_t *score, const rknn_tensor_attr &score_attr,
                            const int8_t *sum, const rknn_tensor_attr &sum_attr,
-                           int in_h, std::vector<Detection> &dets) {
+                           int in_h, float conf, std::vector<Detection> &dets) {
     const int gh = score_attr.dims[2], gw = score_attr.dims[3], grid = gh * gw;
     const int stride = in_h / gh;
     const int dfl = box_attr.dims[1] / 4;
-    const int8_t score_q = quantize(BOX_THRESH, score_attr);
-    const int8_t sum_q = quantize(BOX_THRESH, sum_attr);
+    // The score sum is >= any class score, so it can only skip cells that fail anyway.
+    const int8_t score_q = quantize(conf, score_attr);
+    const int8_t sum_q = quantize(conf, sum_attr);
 
     for (int y = 0; y < gh; y++) {
         for (int x = 0; x < gw; x++) {
@@ -219,7 +216,8 @@ static void decode_v8_head(const int8_t *box, const rknn_tensor_attr &box_attr,
                     best = c;
                 }
             }
-            if (best < 0)
+            // The quantized compare is off by up to half a step, check the real value too.
+            if (best < 0 || dequantize(best_q, score_attr) < conf)
                 continue;
 
             // Distance to each side (l, t, r, b) is the expectation of a softmax over dfl bins.
@@ -258,7 +256,24 @@ static std::vector<Detection> nms(std::vector<Detection> dets) {
 }
 
 int main(int argc, char **argv) {
-    const char *model_path = argc > 1 ? argv[1] : MODEL_PATH;
+    const char *model_path = MODEL_PATH;
+    float conf = DEFAULT_CONF_THRESH;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--conf" && i + 1 < argc) {
+            conf = std::atof(argv[++i]);
+        } else if (arg[0] != '-') {
+            model_path = argv[i];
+        } else {
+            conf = -1;
+            break;
+        }
+    }
+    if (conf <= 0.f || conf >= 1.f) {
+        printf("Usage: %s [model.rknn] [--conf %.2f]\n", argv[0], DEFAULT_CONF_THRESH);
+        return 1;
+    }
+    printf("confidence threshold %.2f\n", conf);
 
     std::ifstream file(model_path, std::ios::binary);
     std::vector<char> model((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -337,6 +352,13 @@ int main(int argc, char **argv) {
 
     // Imported input buffers, keyed by dma-buf inode (a new fd arrives per frame).
     std::unordered_map<ino_t, rknn_tensor_mem *> in_mems;
+
+    DetectionPublisher publisher;
+    if (!publisher.open(DETECTIONS_SOCKET_PATH)) {
+        printf("Can not open %s\n", DETECTIONS_SOCKET_PATH);
+        return 1;
+    }
+    std::vector<DetectionBox> boxes;
 
     int sock = -1;
     int frames = 0, dropped = 0;
@@ -430,13 +452,26 @@ int main(int argc, char **argv) {
         for (int h = 0; h < 3; h++) {
             if (is_v8)
                 decode_v8_head(out(h * 3), out_attr[h * 3], out(h * 3 + 1), out_attr[h * 3 + 1],
-                               out(h * 3 + 2), out_attr[h * 3 + 2], in_h, dets);
+                               out(h * 3 + 2), out_attr[h * 3 + 2], in_h, conf, dets);
             else
-                decode_v5_head(out(h), out_attr[h], h, in_w, in_h, dets);
+                decode_v5_head(out(h), out_attr[h], h, in_w, in_h, conf, dets);
         }
         candidates += dets.size();
         last_dets = nms(std::move(dets));
         decode_ms += ms_since(t4);
+
+        boxes.clear();
+        for (const auto &d : last_dets) {
+            if (boxes.size() == MAX_DETECTIONS)
+                break;
+            boxes.push_back({d.x0, d.y0, d.x1, d.y1, d.score, d.cls});
+        }
+        DetectionsHeader det_hdr{};
+        det_hdr.frameId = hdr.frameId;
+        det_hdr.modelWidth = in_w;
+        det_hdr.modelHeight = in_h;
+        det_hdr.count = boxes.size();
+        publisher.publish(det_hdr, boxes.data());
 
         double frame_ms = ms_since(t0);
         total_ms += frame_ms;
