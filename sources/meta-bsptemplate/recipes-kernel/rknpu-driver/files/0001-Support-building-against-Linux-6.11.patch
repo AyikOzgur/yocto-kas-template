@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ozgurayik <aozgurayik@hotmail.com>
+Date: Tue, 6 Oct 2026 12:10:23 +0200
+Subject: [PATCH] Support building against Linux 6.11
+
+Guard the APIs this port picked up from newer kernels so it also
+builds against 6.11:
+- devfreq governor header is private (drivers/devfreq/governor.h)
+  before it was moved to include/linux/devfreq-governor.h
+- vmf_insert_mixed() takes a pfn_t while <linux/pfn_t.h> exists
+- hrtimer_setup() only exists since 6.13
+- MODULE_IMPORT_NS() takes a bare identifier before 6.13
+
+Upstream-Status: Inappropriate [backport to older kernel]
+---
+ Kbuild              | 2 ++
+ src/rknpu_devfreq.c | 5 +++++
+ src/rknpu_drv.c     | 9 +++++++++
+ src/rknpu_gem.c     | 7 +++++++
+ 4 files changed, 23 insertions(+)
+
+diff --git a/Kbuild b/Kbuild
+index 24b62cc..d7dec66 100644
+--- a/Kbuild
++++ b/Kbuild
+@@ -5,6 +5,8 @@ rknpu-y := src/rknpu_drv.o src/rknpu_gem.o src/rknpu_fence.o \
+ 
+ ccflags-y += -I$(src)/src/include
+ ccflags-y += -I$(src)/src/include/compat
++# Pre-6.18 kernels keep the devfreq governor header private.
++ccflags-y += -I$(srctree)/drivers/devfreq
+ ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_DRM_GEM
+ ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_DEBUG_FS
+ ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_FENCE
+diff --git a/src/rknpu_devfreq.c b/src/rknpu_devfreq.c
+index b9fbed1..95b404b 100644
+--- a/src/rknpu_devfreq.c
++++ b/src/rknpu_devfreq.c
+@@ -11,7 +11,12 @@
+ 
+ #include <linux/clk.h>
+ #include <linux/devfreq.h>
++#if __has_include(<linux/devfreq-governor.h>)
+ #include <linux/devfreq-governor.h>
++#else
++/* Before the header was made public it lived in drivers/devfreq/. */
++#include "governor.h"
++#endif
+ #include <linux/pm_opp.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/regulator/consumer.h>
+diff --git a/src/rknpu_drv.c b/src/rknpu_drv.c
+index 81593d7..566e0ec 100644
+--- a/src/rknpu_drv.c
++++ b/src/rknpu_drv.c
+@@ -840,8 +840,13 @@ static enum hrtimer_restart hrtimer_handler(struct hrtimer *timer)
+ static void rknpu_init_timer(struct rknpu_device *rknpu_dev)
+ {
+ 	rknpu_dev->kt = ktime_set(0, RKNPU_LOAD_INTERVAL);
++#if KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE
+ 	hrtimer_setup(&rknpu_dev->timer, hrtimer_handler, CLOCK_MONOTONIC,
+ 		      HRTIMER_MODE_REL);
++#else
++	hrtimer_init(&rknpu_dev->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
++	rknpu_dev->timer.function = hrtimer_handler;
++#endif
+ 	hrtimer_start(&rknpu_dev->timer, rknpu_dev->kt, HRTIMER_MODE_REL);
+ }
+ 
+@@ -1795,5 +1800,9 @@ MODULE_LICENSE("GPL v2");
+ MODULE_VERSION(RKNPU_GET_DRV_VERSION_STRING(DRIVER_MAJOR, DRIVER_MINOR,
+ 					    DRIVER_PATCHLEVEL));
+ #if KERNEL_VERSION(5, 16, 0) < LINUX_VERSION_CODE
++#if KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE
+ MODULE_IMPORT_NS("DMA_BUF");
++#else
++MODULE_IMPORT_NS(DMA_BUF);
++#endif
+ #endif
+diff --git a/src/rknpu_gem.c b/src/rknpu_gem.c
+index 9e7bc04..b8dcdc8 100644
+--- a/src/rknpu_gem.c
++++ b/src/rknpu_gem.c
+@@ -16,6 +16,9 @@
+ #include <linux/iommu.h>
+ #include <linux/pfn.h>
+ #include <linux/version.h>
++#if __has_include(<linux/pfn_t.h>)
++#include <linux/pfn_t.h>
++#endif
+ #include <asm/cacheflush.h>
+ #include <linux/vmalloc.h>
+ 
+@@ -1310,7 +1313,11 @@ vm_fault_t rknpu_gem_fault(struct vm_fault *vmf)
+ 	}
+ 
+ 	pfn = page_to_pfn(rknpu_obj->pages[page_offset]);
++#if __has_include(<linux/pfn_t.h>)
++	return vmf_insert_mixed(vma, vmf->address, __pfn_to_pfn_t(pfn, PFN_DEV));
++#else
+ 	return vmf_insert_mixed(vma, vmf->address, pfn);
++#endif
+ }
+ #elif KERNEL_VERSION(4, 14, 0) <= LINUX_VERSION_CODE
+ int rknpu_gem_fault(struct vm_fault *vmf)
+-- 
+2.53.0
+

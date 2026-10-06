@@ -1,0 +1,106 @@
+
+/*
+ * Device tree fragment for the RK3566 NPU, used by the out-of-tree
+ * rknpu driver (rknpu-driver recipe). Mainline 6.11 has no NPU node.
+ * Based on dts/rk3566-rknpu-overlay.dts from w568w/rknpu-module.
+ */
+
+&power {
+    power-domain@RK3568_PD_NPU {
+        reg = <RK3568_PD_NPU>;
+        clocks = <&cru ACLK_NPU_PRE>,
+                 <&cru HCLK_NPU_PRE>,
+                 <&cru PCLK_NPU_PRE>;
+        pm_qos = <&qos_npu>;
+        #power-domain-cells = <0>;
+    };
+};
+
+/ {
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        /*
+         * Default CMA area, also exported as /dev/dma_heap/linux,cma.
+         * The NPU runs without its IOMMU and has a 32-bit DMA mask, so
+         * it needs contiguous buffers below 4 GiB (0xf0000000+ is MMIO).
+         */
+        linux,cma {
+            compatible = "shared-dma-pool";
+            reusable;
+            size = <0x0 0x8000000>; /* 128 MiB */
+            alloc-ranges = <0x0 0x0 0x0 0xf0000000>;
+            linux,cma-default;
+        };
+    };
+
+    npu_opp_table: npu-opp-table {
+        compatible = "operating-points-v2";
+
+        opp-200000000 {
+            opp-hz = /bits/ 64 <200000000>;
+            opp-microvolt = <850000 850000 1000000>;
+        };
+        opp-297000000 {
+            opp-hz = /bits/ 64 <297000000>;
+            opp-microvolt = <850000 850000 1000000>;
+        };
+        opp-400000000 {
+            opp-hz = /bits/ 64 <400000000>;
+            opp-microvolt = <850000 850000 1000000>;
+        };
+        opp-600000000 {
+            opp-hz = /bits/ 64 <600000000>;
+            opp-microvolt = <850000 850000 1000000>;
+        };
+        opp-700000000 {
+            opp-hz = /bits/ 64 <700000000>;
+            opp-microvolt = <875000 875000 1000000>;
+        };
+        opp-800000000 {
+            opp-hz = /bits/ 64 <800000000>;
+            opp-microvolt = <925000 925000 1000000>;
+        };
+        /* Rockchip's default max for RK3566/RK3568 (vendor rk3568.dtsi);
+         * 1 GHz is disabled there too. */
+        opp-900000000 {
+            opp-hz = /bits/ 64 <900000000>;
+            opp-microvolt = <975000 975000 1000000>;
+        };
+    };
+
+    npu: npu@fde40000 {
+        compatible = "rockchip,rk3568-rknpu", "rockchip,rknpu";
+        reg = <0x0 0xfde40000 0x0 0x10000>;
+        interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>;
+        interrupt-names = "npu_irq";
+        /* SCMI clock 2 is the NPU clock in Rockchip's BL31 (rkbin). */
+        clocks = <&scmi_clk 2>, <&cru CLK_NPU>,
+                 <&cru ACLK_NPU>, <&cru HCLK_NPU>;
+        clock-names = "scmi_clk", "clk", "aclk", "hclk";
+        assigned-clocks = <&cru CLK_NPU>;
+        assigned-clock-rates = <600000000>;
+        resets = <&cru SRST_A_NPU>, <&cru SRST_H_NPU>;
+        reset-names = "srst_a", "srst_h";
+        power-domains = <&power RK3568_PD_NPU>;
+        operating-points-v2 = <&npu_opp_table>;
+        /* GPU and NPU share DCDC_REG2 on the Radxa Zero 3. */
+        rknpu-supply = <&vdd_gpu_npu>;
+        status = "okay";
+    };
+
+    /* NPU IOMMU is left disabled, so the driver allocates from linux,cma. */
+    npu_mmu: iommu@fde4b000 {
+        compatible = "rockchip,rk3568-iommu";
+        reg = <0x0 0xfde4b000 0x0 0x40>;
+        interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>;
+        interrupt-names = "rknpu_mmu";
+        clocks = <&cru ACLK_NPU>, <&cru HCLK_NPU>;
+        clock-names = "aclk", "iface";
+        power-domains = <&power RK3568_PD_NPU>;
+        #iommu-cells = <0>;
+        status = "disabled";
+    };
+};

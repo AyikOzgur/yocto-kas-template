@@ -1,4 +1,4 @@
-DESCRIPTION = "Vulkan YUYV to BGR letterbox preprocessing service"
+DESCRIPTION = "Vulkan YUYV to RGB letterbox preprocessing service"
 LICENSE = "CLOSED"
 
 SRC_URI = "git://git@github.com/AyikOzgur/preprocessing-service.git;protocol=ssh;branch=main \
@@ -17,7 +17,7 @@ RDEPENDS:${PN} += "mesa-vulkan-drivers"
 inherit cmake systemd
 
 # OpenCV window is for desktop testing only.
-EXTRA_OECMAKE = "-DWITH_OPENCV=OFF -DSHADER_PATH=${datadir}/preprocessing-service/yuyv_to_bgr.spv"
+EXTRA_OECMAKE = "-DWITH_OPENCV=OFF -DSHADER_PATH=${datadir}/preprocessing-service/yuyv_to_rgb.spv"
 
 SYSTEMD_SERVICE:${PN} = "preprocessing-service.service"
 SYSTEMD_AUTO_ENABLE = "enable"

@@ -8,7 +8,9 @@ Wants=camera-service.service
 Environment=PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1
 # Keep GPU at highest frequency, devfreq scaling doubles processing time.
 ExecStartPre=/bin/sh -c 'cat /sys/class/devfreq/fde60000.gpu/max_freq > /sys/class/devfreq/fde60000.gpu/min_freq'
-ExecStart=@@BINDIR@@/preprocessing-service --gpu /dev/dri/renderD128 --dma-heap /dev/dma_heap/system
+# Stable path: the rknpu DRM device can take renderD128 depending on probe order.
+# Output buffers go to the NPU, which runs without IOMMU: must be contiguous (CMA).
+ExecStart=@@BINDIR@@/preprocessing-service --gpu /dev/dri/by-path/platform-fde60000.gpu-render --dma-heap /dev/dma_heap/linux,cma
 Restart=always
 RestartSec=2
 
