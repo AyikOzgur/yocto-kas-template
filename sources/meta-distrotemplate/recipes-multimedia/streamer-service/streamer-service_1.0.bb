@@ -19,7 +19,7 @@ S = "${WORKDIR}"
 
 # Default RTP destination and JPEG quality, can be overridden from local.conf / kas,
 # or at runtime with /var/streamer-service.env (see the unit file).
-STREAMER_DEST ?= "192.168.1.100:5004"
+STREAMER_DEST ?= "192.168.1.7:5004"
 STREAMER_QUALITY ?= "75"
 
 inherit systemd
