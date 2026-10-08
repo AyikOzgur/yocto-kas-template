@@ -36,3 +36,5 @@ RPROVIDES:${PN} += "kernel-module-rknpu-${KERNEL_VERSION}"
 INSANE_SKIP:${PN}-dbg += "buildpaths"
 
 COMPATIBLE_MACHINE = "radxa-zero-3w"
+# The vendor kernel has the RKNPU driver built in.
+COMPATIBLE_MACHINE:radxa-zero-3w-vendor = "(^$)"

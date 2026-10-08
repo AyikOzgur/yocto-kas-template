@@ -52,7 +52,9 @@ V4l2JpegEncoder::~V4l2JpegEncoder() {
     close();
 }
 
-bool V4l2JpegEncoder::open(const std::string &device, int width, int height, int quality) {
+bool V4l2JpegEncoder::open(int width, int height) {
+    const std::string &device = m_device;
+    const int quality = m_quality;
     close();
 
     std::string path, card;

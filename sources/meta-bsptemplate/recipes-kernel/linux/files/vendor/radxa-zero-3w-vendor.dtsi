@@ -1,0 +1,33 @@
+
+/*
+ * Board adjustments on top of Radxa's rk3566-radxa-zero-3w-aic8800ds2.dts,
+ * appended by linux-radxa_6.1.bb.
+ */
+
+/* Serial console on ttyS2 1500000 like the mainline image (Radxa leaves it off). */
+&uart2 {
+    status = "okay";
+};
+
+/* NPU and its IOMMU are disabled in the vendor dtsi (Radxa enables them with an overlay). */
+&rknpu {
+    status = "okay";
+};
+
+&rknpu_mmu {
+    status = "okay";
+};
+
+/*
+ * Default CMA area, also exported as /dev/dma_heap/linux,cma (preprocessing output).
+ * Below 4 GiB for 32-bit DMA masters (0xf0000000+ is MMIO).
+ */
+&reserved_memory {
+    linux,cma {
+        compatible = "shared-dma-pool";
+        reusable;
+        size = <0x0 0x8000000>; /* 128 MiB */
+        alloc-ranges = <0x0 0x0 0x0 0xf0000000>;
+        linux,cma-default;
+    };
+};

@@ -1,19 +1,24 @@
 [Unit]
-Description=RTP/JPEG streamer (test)
-After=renderer-service.service
-Wants=renderer-service.service
+Description=RTP streamer (test)
+After=overlay-service.service
+Wants=overlay-service.service
 
 [Service]
 Environment=STREAMER_DEST=@@STREAMER_DEST@@
+Environment=STREAMER_CODEC=@@STREAMER_CODEC@@
 Environment=STREAMER_QUALITY=@@STREAMER_QUALITY@@
+Environment=STREAMER_BITRATE=@@STREAMER_BITRATE@@
 Environment=STREAMER_EXTRA_ARGS=
 # Override without rebuilding (persistent data partition), e.g. stream:
 #   echo STREAMER_DEST=192.168.1.42:5004 > /var/streamer-service.env
+# codec jpeg (mainline kernel) or h264 / h265 (vendor kernel), bitrate in kbps:
+#   STREAMER_CODEC=h265
+#   STREAMER_BITRATE=1500
 # or record 60 s to a file without network:
 #   STREAMER_DEST=
 #   STREAMER_EXTRA_ARGS=--record /var/recordings --record-seconds 60
 EnvironmentFile=-/var/streamer-service.env
-ExecStart=@@BINDIR@@/streamer-service --dest ${STREAMER_DEST} --quality ${STREAMER_QUALITY} $STREAMER_EXTRA_ARGS
+ExecStart=@@BINDIR@@/streamer-service --codec ${STREAMER_CODEC} --dest ${STREAMER_DEST} --quality ${STREAMER_QUALITY} --bitrate ${STREAMER_BITRATE} $STREAMER_EXTRA_ARGS
 Restart=always
 RestartSec=2
 

@@ -1,11 +1,14 @@
 // Streamer test service.
 //
-// Encodes renderer-service frames (YUYV dma-bufs) with the hardware JPEG
-// encoder. Every JPEG is
-// - sent as RTP/JPEG over UDP (--dest), play on the host with
-//   tools/rtp-mjpeg.sdp in the yocto tree, and/or
-// - appended to a raw MJPEG file in a directory (--record), play on the host with
-//   ffplay -f mjpeg -framerate <fps> overlay-000.mjpeg
+// Encodes overlay-service frames (YUYV dma-bufs, imported without copies) with a
+// hardware encoder:
+// - jpeg: Hantro VEPU over V4L2 (mainline kernel)
+// - h264 / h265: Rockchip VEPU through MPP (vendor kernel, built with WITH_MPP)
+// Every encoded frame is
+// - sent over RTP/UDP right away (--dest), play on the host with
+//   tools/rtp-<codec>.sdp in the yocto tree, and/or
+// - appended to a raw stream file in a directory (--record), play on the host with
+//   ffplay overlay-000.h264 (or ffplay -f mjpeg -framerate <fps> overlay-000.mjpeg)
 
 #include <algorithm>
 #include <cerrno>
@@ -23,13 +26,19 @@
 #include <unistd.h>
 
 #include "FrameHeader.h"
+#include "RtpH26xSender.h"
 #include "RtpJpegSender.h"
 #include "SocketClient.h"
 #include "V4l2JpegEncoder.h"
+#ifdef WITH_MPP
+#include "MppEncoder.h"
+#endif
 
 static const char *INPUT_SOCKET_PATH = "/run/renderer-service.sock";
 static const int TIMEOUT_MS = 1000;
 static const int DEFAULT_QUALITY = 75;
+static const int DEFAULT_BITRATE_KBPS = 2000;
+static const int DEFAULT_FPS = 25;
 static const int DEFAULT_RECORD_SECONDS = 60;
 
 using Clock = std::chrono::steady_clock;
@@ -38,16 +47,17 @@ static double ms_since(Clock::time_point t) {
     return std::chrono::duration<double, std::milli>(Clock::now() - t).count();
 }
 
-/// Writes JPEG frames back to back (raw MJPEG) for a limited time into a new
-/// numbered file in a directory. Existing recordings are never overwritten, the
+/// Writes encoded frames back to back (raw MJPEG or Annex-B H.264/H.265) for a
+/// limited time into a new numbered file in a directory. Existing recordings are never overwritten, the
 /// file is only created when the first frame arrives (e.g. not on a boot
 /// without camera).
-class MjpegRecorder {
+class StreamRecorder {
 public:
-    ~MjpegRecorder() { stop(); }
+    ~StreamRecorder() { stop(); }
 
-    void arm(const std::string &dir, int seconds) {
+    void arm(const std::string &dir, const std::string &extension, int seconds) {
         m_dir = dir;
+        m_extension = extension;
         m_limit = std::chrono::seconds(seconds);
         m_armed = true;
         std::cout << "[record] will record " << seconds << " s into " << dir << std::endl;
@@ -55,7 +65,7 @@ public:
 
     bool active() const { return m_armed; }
 
-    void write(const std::vector<uint8_t> &jpeg) {
+    void write(const std::vector<uint8_t> &frame) {
         if (!m_armed)
             return;
         if (!m_file && !open()) {
@@ -70,13 +80,13 @@ public:
             return;
         }
         // Flush every frame, so pulling the camera cable to plug in Ethernet loses nothing.
-        if (std::fwrite(jpeg.data(), 1, jpeg.size(), m_file) != jpeg.size() || std::fflush(m_file) != 0) {
+        if (std::fwrite(frame.data(), 1, frame.size(), m_file) != frame.size() || std::fflush(m_file) != 0) {
             std::cerr << "[record] write failed (disk full?): " << strerror(errno) << std::endl;
             stop();
             return;
         }
         m_frames++;
-        m_bytes += jpeg.size();
+        m_bytes += frame.size();
     }
 
     void stop() {
@@ -94,6 +104,7 @@ public:
 
 private:
     std::string m_dir;
+    std::string m_extension;
     std::string m_path;
     bool m_armed{false};
     std::FILE *m_file{nullptr};
@@ -107,7 +118,7 @@ private:
         std::filesystem::create_directories(m_dir, ec);
         for (int i = 0; i < 1000 && !m_file; i++) {
             char name[32];
-            std::snprintf(name, sizeof(name), "overlay-%03d.mjpeg", i);
+            std::snprintf(name, sizeof(name), "overlay-%03d.%s", i, m_extension.c_str());
             m_path = (std::filesystem::path(m_dir) / name).string();
             // "x": fail instead of overwriting an existing recording.
             m_file = std::fopen(m_path.c_str(), "wbx");
@@ -124,19 +135,27 @@ private:
 };
 
 static void usage(const char *name) {
-    std::cout << "Usage: " << name << " [--dest <ip>:<port>] [--record <dir> [--record-seconds "
-              << DEFAULT_RECORD_SECONDS << "]] [--quality 5..100] [--device /dev/videoN]\n"
+    std::cout << "Usage: " << name << " [--codec jpeg|h264|h265] [--dest <ip>:<port>] [--record <dir> "
+              << "[--record-seconds " << DEFAULT_RECORD_SECONDS << "]]\n"
+              << "       jpeg:      [--quality 5..100] [--device /dev/videoN]\n"
+              << "       h264/h265: [--bitrate " << DEFAULT_BITRATE_KBPS << " kbps] [--gop <frames>, default fps] "
+              << "[--fps " << DEFAULT_FPS << "]\n"
               << "At least one of --dest and --record is needed, an empty --dest disables RTP.\n"
-              << "--record writes <dir>/overlay-NNN.mjpeg, a new file per recording." << std::endl;
+              << "--record writes <dir>/overlay-NNN.<codec>, a new file per recording." << std::endl;
 }
 
 int main(int argc, char **argv) {
-    std::string dest, device, record_dir;
+    std::string codec = "jpeg", dest, device, record_dir;
     int quality = DEFAULT_QUALITY;
+    int bitrate = DEFAULT_BITRATE_KBPS;
+    int fps = DEFAULT_FPS;
+    int gop = 0;
     int record_seconds = DEFAULT_RECORD_SECONDS;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if (arg == "--dest" && i + 1 < argc) {
+        if (arg == "--codec" && i + 1 < argc) {
+            codec = argv[++i];
+        } else if (arg == "--dest" && i + 1 < argc) {
             dest = argv[++i];
         } else if (arg == "--record" && i + 1 < argc) {
             record_dir = argv[++i];
@@ -144,6 +163,12 @@ int main(int argc, char **argv) {
             record_seconds = std::atoi(argv[++i]);
         } else if (arg == "--quality" && i + 1 < argc) {
             quality = std::atoi(argv[++i]);
+        } else if (arg == "--bitrate" && i + 1 < argc) {
+            bitrate = std::atoi(argv[++i]);
+        } else if (arg == "--gop" && i + 1 < argc) {
+            gop = std::atoi(argv[++i]);
+        } else if (arg == "--fps" && i + 1 < argc) {
+            fps = std::atoi(argv[++i]);
         } else if (arg == "--device" && i + 1 < argc) {
             device = argv[++i];
         } else {
@@ -151,12 +176,30 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
-    if ((dest.empty() && record_dir.empty()) || quality < 5 || quality > 100 || record_seconds <= 0) {
+    // One IDR per second by default: quick start for new receivers and after packet loss.
+    if (gop == 0)
+        gop = fps;
+    const bool jpeg = codec == "jpeg";
+    const bool hevc = codec == "h265";
+    if ((!jpeg && codec != "h264" && !hevc) || (dest.empty() && record_dir.empty()) || quality < 5 ||
+        quality > 100 || bitrate <= 0 || fps <= 0 || gop <= 0 || record_seconds <= 0) {
         usage(argv[0]);
         return 1;
     }
 
-    std::unique_ptr<RtpJpegSender> rtp;
+    std::unique_ptr<VideoEncoder> encoder;
+    if (jpeg) {
+        encoder = std::make_unique<V4l2JpegEncoder>(device, quality);
+    } else {
+#ifdef WITH_MPP
+        encoder = std::make_unique<MppEncoder>(hevc, bitrate, gop, fps);
+#else
+        std::cout << "Built without MPP, only --codec jpeg is available." << std::endl;
+        return 1;
+#endif
+    }
+
+    std::unique_ptr<RtpSender> rtp;
     if (!dest.empty()) {
         const size_t colon = dest.rfind(':');
         const int port = colon == std::string::npos ? 0 : std::atoi(dest.c_str() + colon + 1);
@@ -165,23 +208,25 @@ int main(int argc, char **argv) {
             return 1;
         }
         const std::string ip = dest.substr(0, colon);
-        rtp = std::make_unique<RtpJpegSender>();
+        if (jpeg)
+            rtp = std::make_unique<RtpJpegSender>();
+        else
+            rtp = std::make_unique<RtpH26xSender>(hevc);
         if (!rtp->open(ip, port))
             return 1;
-        std::cout << "Streaming RTP/JPEG (PT 26) to " << ip << ":" << port << std::endl;
+        std::cout << "Streaming RTP " << codec << " (PT " << (jpeg ? 26 : 96) << ") to " << ip << ":" << port
+                  << std::endl;
     }
 
-    MjpegRecorder recorder;
+    StreamRecorder recorder;
     if (!record_dir.empty())
-        recorder.arm(record_dir, record_seconds);
+        recorder.arm(record_dir, jpeg ? "mjpeg" : codec, record_seconds);
 
     SocketClient input;
     if (!input.init(INPUT_SOCKET_PATH)) {
         std::cout << INPUT_SOCKET_PATH << " can not connect." << std::endl;
         return 1;
     }
-
-    V4l2JpegEncoder encoder;
 
     int frames = 0, encode_errors = 0, send_errors = 0;
     double encode_ms = 0, max_ms = 0;
@@ -199,12 +244,12 @@ int main(int argc, char **argv) {
         // Nothing to do once recording is over and RTP is off, leave the encoder idle.
         if (!rtp && !recorder.active()) {
             ::close(fd);
-            encoder.close();
+            encoder->close();
             continue;
         }
 
-        if (!encoder.isOpen() || encoder.width() != (int)hdr.width || encoder.height() != (int)hdr.height) {
-            if (!encoder.open(device, hdr.width, hdr.height, quality)) {
+        if (!encoder->isOpen() || encoder->width() != (int)hdr.width || encoder->height() != (int)hdr.height) {
+            if (!encoder->open(hdr.width, hdr.height)) {
                 ::close(fd);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 continue;
@@ -212,25 +257,25 @@ int main(int argc, char **argv) {
         }
 
         auto t0 = Clock::now();
-        const auto &jpeg = encoder.encode(fd, hdr.length);
+        const auto &encoded = encoder->encode(fd, hdr.length);
         ::close(fd);
         const double ms = ms_since(t0);
-        if (jpeg.empty()) {
+        if (encoded.empty()) {
             encode_errors++;
             continue;
         }
         frames++;
-        bytes += jpeg.size();
+        bytes += encoded.size();
         encode_ms += ms;
         max_ms = std::max(max_ms, ms);
 
-        recorder.write(jpeg);
+        recorder.write(encoded);
 
         if (rtp) {
             // RTP clock is 90 kHz.
             const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 Clock::now().time_since_epoch()).count();
-            if (!rtp->send(jpeg.data(), jpeg.size(), (uint32_t)(now_us * 9 / 100)))
+            if (!rtp->send(encoded.data(), encoded.size(), (uint32_t)(now_us * 9 / 100)))
                 send_errors++;
         }
 

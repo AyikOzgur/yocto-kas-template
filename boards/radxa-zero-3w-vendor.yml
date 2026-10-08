@@ -1,0 +1,19 @@
+header:
+  version: 14
+  includes:
+    - boards/radxa-zero-3w.yml
+
+# Same image on Radxa's vendor kernel (hardware video encoder, built-in RKNPU):
+#   kas build boards/radxa-zero-3w-vendor.yml
+machine: radxa-zero-3w-vendor
+
+local_conf_header:
+  vendor-kernel: |
+    # RKNPU is built into the vendor kernel, the out-of-tree port is mainline only.
+    IMAGE_INSTALL:remove = "rknpu-driver"
+    # Vendor codecs are behind /dev/mpp_service (not V4L2), so the UVC camera is video0.
+    CAMERA_VIDEO_DEVICE = "/dev/video0"
+    # Hardware H.264/H.265 encoder library and its test tools.
+    IMAGE_INSTALL:append = " rockchip-mpp rockchip-mpp-tests"
+    # Stream H.264 through MPP (h265 also works, set it in /var/streamer-service.env).
+    STREAMER_CODEC = "h264"

@@ -40,6 +40,8 @@ FILES:${PN} = "${libdir}/librknnrt.so"
 
 # Needs the rknpu driver to do anything.
 RRECOMMENDS:${PN} = "rknpu-driver"
+# The vendor kernel has the RKNPU driver built in.
+RRECOMMENDS:${PN}:radxa-zero-3w-vendor = ""
 
 # Prebuilt by Rockchip: stripped and linked without GNU_HASH.
 INSANE_SKIP:${PN} = "already-stripped ldflags"
