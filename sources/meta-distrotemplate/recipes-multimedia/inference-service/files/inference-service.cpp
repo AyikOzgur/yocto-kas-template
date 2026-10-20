@@ -464,7 +464,9 @@ int main(int argc, char **argv) {
         for (const auto &d : last_dets) {
             if (boxes.size() == MAX_DETECTIONS)
                 break;
-            boxes.push_back({d.x0, d.y0, d.x1, d.y1, d.score, d.cls});
+            DetectionBox box{d.x0, d.y0, d.x1, d.y1, d.score, d.cls, {}};
+            box.setLabel(COCO[d.cls]);
+            boxes.push_back(box);
         }
         DetectionsHeader det_hdr{};
         det_hdr.frameId = hdr.frameId;

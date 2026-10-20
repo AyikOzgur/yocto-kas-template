@@ -5,6 +5,10 @@
 // DetectionsHeader followed by `count` DetectionBox entries. Boxes are in the
 // model input space (letterboxed modelWidth x modelHeight), consumers map them
 // back to their frame size with the same letterbox as preprocessing-service.
+// Each box carries its class name, so consumers do not depend on the model.
+//
+// Publisher and subscribers must be built from the same layout, messages of a
+// different size are dropped.
 
 #include <algorithm>
 #include <cerrno>
@@ -21,6 +25,7 @@
 
 static const char *DETECTIONS_SOCKET_PATH = "/run/inference-service.sock";
 static const int MAX_DETECTIONS = 64;
+static const int MAX_LABEL_SIZE = 24;
 
 struct __attribute__((packed)) DetectionsHeader {
     /// @brief Frame id of the camera frame the detections belong to.
@@ -36,10 +41,17 @@ struct __attribute__((packed)) DetectionBox {
     float x0, y0, x1, y1;
     float score;
     int32_t classId;
+    /// @brief Class name, NUL terminated, truncated to MAX_LABEL_SIZE - 1 characters.
+    char label[MAX_LABEL_SIZE];
+
+    void setLabel(const char *name) {
+        std::strncpy(label, name, sizeof(label) - 1);
+        label[sizeof(label) - 1] = '\0';
+    }
 };
 
 static_assert(sizeof(DetectionsHeader) == 14, "DetectionsHeader must be 14 bytes");
-static_assert(sizeof(DetectionBox) == 24, "DetectionBox must be 24 bytes");
+static_assert(sizeof(DetectionBox) == 48, "DetectionBox must be 48 bytes");
 
 /// @brief Publishes detection messages to all connected clients, never blocks.
 class DetectionPublisher {
@@ -134,11 +146,20 @@ public:
             }
             if (static_cast<size_t>(n) < sizeof(DetectionsHeader))
                 continue;
-            std::memcpy(&hdr, buf, sizeof(hdr));
-            size_t count = std::min<size_t>(hdr.count, (n - sizeof(hdr)) / sizeof(DetectionBox));
-            boxes.resize(count);
-            std::memcpy(boxes.data(), buf + sizeof(hdr), count * sizeof(DetectionBox));
-            hdr.count = static_cast<uint16_t>(count);
+            DetectionsHeader msg_hdr;
+            std::memcpy(&msg_hdr, buf, sizeof(msg_hdr));
+            if (static_cast<size_t>(n) != sizeof(msg_hdr) + msg_hdr.count * sizeof(DetectionBox)) {
+                if (!m_sizeWarned)
+                    std::cerr << "[detections] message size " << n << " does not match " << msg_hdr.count
+                              << " boxes, publisher built with another DetectionBox layout?\n";
+                m_sizeWarned = true;
+                continue;
+            }
+            hdr = msg_hdr;
+            boxes.resize(hdr.count);
+            std::memcpy(boxes.data(), buf + sizeof(hdr), hdr.count * sizeof(DetectionBox));
+            for (auto &box : boxes)
+                box.label[sizeof(box.label) - 1] = '\0';
             got = true;
         }
         return got;
@@ -146,6 +167,7 @@ public:
 
 private:
     int m_fd{-1};
+    bool m_sizeWarned{false};
     std::chrono::steady_clock::time_point m_lastAttempt{};
 
     bool connect(const std::string &path) {

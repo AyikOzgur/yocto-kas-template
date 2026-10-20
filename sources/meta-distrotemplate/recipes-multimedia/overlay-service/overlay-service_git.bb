@@ -1,7 +1,7 @@
 DESCRIPTION = "Overlay service"
 LICENSE = "CLOSED"
 
-SRC_URI = "git://git@github.com/AyikOzgur/overlay-service.git;protocol=ssh;branch=main \
+SRC_URI = "git://git@github.com/AyikOzgur/overlay-service.git;protocol=ssh;branch=osd-abstraction \
            file://overlay-service.service"
 
 # Follow latest main while testing, pin to a commit for releases.
