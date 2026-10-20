@@ -9,6 +9,16 @@
     status = "okay";
 };
 
+/*
+ * Flight controller MAVLink on ttyS4 (UART4-M1, header pin 16 RX, pin 18 TX).
+ * The SoC dtsi defaults to the M0 pins, which aren't on the header.
+ */
+&uart4 {
+    pinctrl-names = "default";
+    pinctrl-0 = <&uart4m1_xfer>;
+    status = "okay";
+};
+
 /* NPU and its IOMMU are disabled in the vendor dtsi (Radxa enables them with an overlay). */
 &rknpu {
     status = "okay";

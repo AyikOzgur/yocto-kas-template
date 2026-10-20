@@ -2,6 +2,7 @@ inherit core-image
 CORE_IMAGE_EXTRA_INSTALL += "htop v4l-utils python3 update-status"
 CORE_IMAGE_EXTRA_INSTALL += "camera-service preprocessing-service inference-service"
 CORE_IMAGE_EXTRA_INSTALL += "overlay-service streamer-service"
+CORE_IMAGE_EXTRA_INSTALL += "mavlink-router"
 
 IMAGE_FEATURES += "read-only-rootfs"
 
