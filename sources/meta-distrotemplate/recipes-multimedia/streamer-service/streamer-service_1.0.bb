@@ -26,7 +26,7 @@ S = "${WORKDIR}"
 
 # Defaults, can be overridden from local.conf / kas, or at runtime with
 # /var/streamer-service.env (see the unit file).
-STREAMER_DEST ?= "10.219.111.15:5004"
+STREAMER_DEST ?= "10.36.123.15:5004"
 # jpeg (V4L2 Hantro, mainline kernel) or h264 / h265 (MPP, vendor kernel).
 STREAMER_CODEC ?= "jpeg"
 STREAMER_QUALITY ?= "75"

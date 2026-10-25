@@ -19,6 +19,20 @@
     status = "okay";
 };
 
+/*
+ * Wi-Fi on the external antenna connector (U.FL) instead of the onboard chip antenna.
+ * The RF switch is held by board_antenna: the vendor dts drives GPIO3_D3 low (onboard),
+ * Radxa's radxa-zero3-external-antenna overlay drives GPIO3_D2 low instead. Same here.
+ * Drop this block to go back to the onboard antenna.
+ */
+&board_antenna {
+    gpio = <&gpio3 RK_PD2 GPIO_ACTIVE_LOW>;
+};
+
+&ant_1 {
+    rockchip,pins = <3 RK_PD2 RK_FUNC_GPIO &pcfg_pull_down>;
+};
+
 /* NPU and its IOMMU are disabled in the vendor dtsi (Radxa enables them with an overlay). */
 &rknpu {
     status = "okay";
