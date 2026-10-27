@@ -22,6 +22,7 @@ repos:
       meta-oe:
       meta-python:
       meta-networking:
+      meta-multimedia:
 
   meta-arm:
     url: https://git.yoctoproject.org/meta-arm

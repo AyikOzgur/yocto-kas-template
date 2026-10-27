@@ -15,5 +15,3 @@ local_conf_header:
     CAMERA_VIDEO_DEVICE = "/dev/video0"
     # Hardware H.264/H.265 encoder library and its test tools.
     IMAGE_INSTALL:append = " rockchip-mpp rockchip-mpp-tests"
-    # Stream H.264 through MPP (h265 also works, set it in /var/streamer-service.env).
-    STREAMER_CODEC = "h264"

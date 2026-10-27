@@ -131,6 +131,11 @@ void MppEncoder::close() {
     m_width = m_height = 0;
 }
 
+void MppEncoder::requestKeyframe() {
+    if (m_ctx)
+        api(m_mpi)->control(ctx(m_ctx), MPP_ENC_SET_IDR_FRAME, nullptr);
+}
+
 const std::vector<uint8_t> &MppEncoder::encode(int dma_buf_fd, uint32_t length) {
     m_stream.clear();
     if (!m_ctx)
