@@ -61,6 +61,23 @@ int SrtServer::acceptClients() {
     return joined;
 }
 
+LinkStats SrtServer::stats() {
+    LinkStats total;
+    for (SRTSOCKET client : m_clients) {
+        SRT_TRACEBSTATS s{};
+        // clear = 1: interval counters start over.
+        if (srt_bstats(client, &s, 1) == SRT_ERROR)
+            continue;
+        total.sent += s.pktSent;
+        total.lost += s.pktSndLoss;
+        total.retransmitted += s.pktRetrans;
+        total.dropped += s.pktSndDrop;
+        total.send_buffer_ms = std::max(total.send_buffer_ms, s.msSndBuf);
+        total.rtt_ms = std::max(total.rtt_ms, s.msRTT);
+    }
+    return total;
+}
+
 bool SrtServer::send(const uint8_t *data, size_t size) {
     bool complete = true;
     for (auto it = m_clients.begin(); it != m_clients.end();) {

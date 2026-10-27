@@ -29,6 +29,10 @@ public:
     /// Encode the next frame as IDR, e.g. for a receiver that just joined.
     void requestKeyframe();
 
+    /// Change the constant bitrate target, also while encoding.
+    void setBitrate(int kbps);
+    int bitrate() const { return m_bitrate_kbps; }
+
     /** @brief Encode one frame, blocks until the hardware is done.
      *  @param dma_buf_fd YUYV frame, the caller keeps ownership.
      *  @param length Size of the frame in bytes.

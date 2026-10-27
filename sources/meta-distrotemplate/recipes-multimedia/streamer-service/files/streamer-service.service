@@ -11,9 +11,11 @@ Environment=STREAMER_LATENCY=@@STREAMER_LATENCY@@
 Environment=STREAMER_EXTRA_ARGS=
 # Override without rebuilding (persistent data partition), e.g.:
 #   echo STREAMER_CODEC=h265 > /var/streamer-service.env
-# bitrate in kbps, SRT latency in ms (more survives worse links):
+# max bitrate in kbps, SRT latency in ms (more survives worse links):
 #   STREAMER_BITRATE=1500
 #   STREAMER_LATENCY=200
+# The bitrate adapts to the link down to --min-bitrate (default 500), equal to the max keeps it fixed:
+#   STREAMER_EXTRA_ARGS=--min-bitrate 800
 # Watch from any machine (receiver latency in us, the larger side wins):
 #   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:<port>?latency=50000"
 EnvironmentFile=-/var/streamer-service.env

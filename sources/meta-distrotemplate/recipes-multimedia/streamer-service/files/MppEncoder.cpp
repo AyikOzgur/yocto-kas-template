@@ -24,6 +24,13 @@ MppApi *api(void *p) {
     return static_cast<MppApi *>(p);
 }
 
+void setBitrateCfg(MppEncCfg cfg, int kbps) {
+    const int bps = kbps * 1000;
+    mpp_enc_cfg_set_s32(cfg, "rc:bps_target", bps);
+    mpp_enc_cfg_set_s32(cfg, "rc:bps_max", bps * 17 / 16);
+    mpp_enc_cfg_set_s32(cfg, "rc:bps_min", bps * 15 / 16);
+}
+
 } // namespace
 
 MppEncoder::~MppEncoder() {
@@ -66,11 +73,8 @@ bool MppEncoder::open(int width, int height) {
     mpp_enc_cfg_set_s32(cfg, "prep:range", MPP_FRAME_RANGE_MPEG);
 
     // Constant bitrate keeps the stream steady over Wi-Fi, frame drops off.
-    const int bps = m_bitrate_kbps * 1000;
     mpp_enc_cfg_set_s32(cfg, "rc:mode", MPP_ENC_RC_MODE_CBR);
-    mpp_enc_cfg_set_s32(cfg, "rc:bps_target", bps);
-    mpp_enc_cfg_set_s32(cfg, "rc:bps_max", bps * 17 / 16);
-    mpp_enc_cfg_set_s32(cfg, "rc:bps_min", bps * 15 / 16);
+    setBitrateCfg(cfg, m_bitrate_kbps);
     mpp_enc_cfg_set_u32(cfg, "rc:drop_mode", MPP_ENC_RC_DROP_FRM_DISABLED);
     mpp_enc_cfg_set_s32(cfg, "rc:fps_in_flex", 0);
     mpp_enc_cfg_set_s32(cfg, "rc:fps_in_num", m_fps);
@@ -134,6 +138,20 @@ void MppEncoder::close() {
 void MppEncoder::requestKeyframe() {
     if (m_ctx)
         api(m_mpi)->control(ctx(m_ctx), MPP_ENC_SET_IDR_FRAME, nullptr);
+}
+
+void MppEncoder::setBitrate(int kbps) {
+    m_bitrate_kbps = kbps;
+    if (!m_ctx)
+        return;
+    // Rate control can change while encoding, no reopen and no extra IDR.
+    MppEncCfg cfg = nullptr;
+    mpp_enc_cfg_init(&cfg);
+    api(m_mpi)->control(ctx(m_ctx), MPP_ENC_GET_CFG, cfg);
+    setBitrateCfg(cfg, kbps);
+    if (api(m_mpi)->control(ctx(m_ctx), MPP_ENC_SET_CFG, cfg) != MPP_OK)
+        std::cerr << "[mpp] can not set bitrate " << kbps << " kbps" << std::endl;
+    mpp_enc_cfg_deinit(cfg);
 }
 
 const std::vector<uint8_t> &MppEncoder::encode(int dma_buf_fd, uint32_t length) {

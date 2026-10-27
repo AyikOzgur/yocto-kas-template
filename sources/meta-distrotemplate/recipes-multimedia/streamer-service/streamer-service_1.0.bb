@@ -11,6 +11,7 @@ SRC_URI = "file://main.cpp \
            file://TsMuxer.cpp \
            file://SrtServer.h \
            file://SrtServer.cpp \
+           file://BitrateController.h \
            file://streamer-service.service \
            file://FrameHeader.h \
            file://SocketClient.h \
@@ -24,6 +25,7 @@ S = "${WORKDIR}"
 STREAMER_PORT ?= "9000"
 # h264 or h265.
 STREAMER_CODEC ?= "h264"
+# Max bitrate in kbps, lowered at runtime when the link struggles.
 STREAMER_BITRATE ?= "2000"
 # SRT latency in ms, the receiver's own setting counts too (the larger one is used).
 STREAMER_LATENCY ?= "50"
