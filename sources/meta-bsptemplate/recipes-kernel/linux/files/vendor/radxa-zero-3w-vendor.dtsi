@@ -55,3 +55,12 @@
         linux,cma-default;
     };
 };
+
+/*
+ * USB 2.0 OTG Type-C port as host (USB camera). Radxa leaves it in "otg" with the role
+ * taken from the PHY's ID/VBUS detection, which ends up as peripheral on this board.
+ * The board is powered from the header, so the port isn't needed for power or gadget mode.
+ */
+&usbdrd_dwc3 {
+    dr_mode = "host";
+};
