@@ -1,5 +1,5 @@
 [Unit]
-Description=SRT streamer
+Description=Video streamer (SRT, and wfb-ng over UDP)
 After=overlay-service.service network.target
 Wants=overlay-service.service
 
@@ -8,6 +8,7 @@ Environment=STREAMER_PORT=@@STREAMER_PORT@@
 Environment=STREAMER_CODEC=@@STREAMER_CODEC@@
 Environment=STREAMER_BITRATE=@@STREAMER_BITRATE@@
 Environment=STREAMER_LATENCY=@@STREAMER_LATENCY@@
+Environment=STREAMER_UDP=@@STREAMER_UDP@@
 Environment=STREAMER_EXTRA_ARGS=
 # Override without rebuilding (persistent data partition), e.g.:
 #   echo STREAMER_CODEC=h265 > /var/streamer-service.env
@@ -16,10 +17,12 @@ Environment=STREAMER_EXTRA_ARGS=
 #   STREAMER_LATENCY=200
 # The bitrate adapts to the link down to --min-bitrate (default 500), equal to the max keeps it fixed:
 #   STREAMER_EXTRA_ARGS=--min-bitrate 800
+# SRT only, nothing to wfb_tx:
+#   STREAMER_UDP=
 # Watch from any machine (receiver latency in us, the larger side wins):
 #   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:<port>?latency=50000"
 EnvironmentFile=-/var/streamer-service.env
-ExecStart=@@BINDIR@@/streamer-service --port ${STREAMER_PORT} --codec ${STREAMER_CODEC} --bitrate ${STREAMER_BITRATE} --latency ${STREAMER_LATENCY} $STREAMER_EXTRA_ARGS
+ExecStart=@@BINDIR@@/streamer-service --port ${STREAMER_PORT} --codec ${STREAMER_CODEC} --bitrate ${STREAMER_BITRATE} --latency ${STREAMER_LATENCY} --udp "${STREAMER_UDP}" $STREAMER_EXTRA_ARGS
 Restart=always
 RestartSec=2
 

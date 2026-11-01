@@ -40,5 +40,6 @@ public:
 
 private:
     SRTSOCKET m_listener{SRT_INVALID_SOCK};
+    int m_epoll{-1};
     std::vector<SRTSOCKET> m_clients;
 };

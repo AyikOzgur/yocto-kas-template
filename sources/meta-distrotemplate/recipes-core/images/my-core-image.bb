@@ -4,6 +4,8 @@ CORE_IMAGE_EXTRA_INSTALL += "camera-service preprocessing-service inference-serv
 CORE_IMAGE_EXTRA_INSTALL += "overlay-service"
 # Hardware H.264/H.265 encoding through MPP needs the vendor kernel.
 CORE_IMAGE_EXTRA_INSTALL:append:radxa-zero-3w-vendor = " streamer-service"
+# Video over WiFi broadcast on an RTL8812EU USB card (wfb0).
+CORE_IMAGE_EXTRA_INSTALL:append:radxa-zero-3w-vendor = " rtl8812eu-driver wfb-ng"
 CORE_IMAGE_EXTRA_INSTALL += "mavlink-router"
 
 IMAGE_FEATURES += "read-only-rootfs"

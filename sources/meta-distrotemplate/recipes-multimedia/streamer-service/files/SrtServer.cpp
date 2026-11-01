@@ -16,6 +16,8 @@ const size_t CHUNK_SIZE = 7 * 188;
 SrtServer::~SrtServer() {
     for (SRTSOCKET client : m_clients)
         srt_close(client);
+    if (m_epoll >= 0)
+        srt_epoll_release(m_epoll);
     if (m_listener != SRT_INVALID_SOCK)
         srt_close(m_listener);
     srt_cleanup();
@@ -41,12 +43,20 @@ bool SrtServer::listen(int port, int latency_ms) {
         std::cerr << "[srt] can not listen on port " << port << ": " << srt_getlasterror_str() << std::endl;
         return false;
     }
+    // Readable listener = a receiver is waiting to be accepted.
+    const int events = SRT_EPOLL_IN;
+    m_epoll = srt_epoll_create();
+    srt_epoll_add_usock(m_epoll, m_listener, &events);
     return true;
 }
 
 int SrtServer::acceptClients() {
     int joined = 0;
-    for (;;) {
+    // Ask epoll first, srt_accept logs an error for every call without a pending connection.
+    SRTSOCKET ready;
+    int num = 1;
+    while (srt_epoll_wait(m_epoll, &ready, &num, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr) > 0) {
+        num = 1;
         sockaddr_in peer{};
         int len = sizeof(peer);
         SRTSOCKET client = srt_accept(m_listener, reinterpret_cast<sockaddr *>(&peer), &len);

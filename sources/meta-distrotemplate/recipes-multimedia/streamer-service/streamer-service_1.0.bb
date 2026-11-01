@@ -1,4 +1,4 @@
-DESCRIPTION = "Streamer, hardware encodes overlay-service frames (H.264/H.265 with MPP) and serves them over SRT"
+DESCRIPTION = "Streamer, hardware encodes overlay-service frames (H.264/H.265 with MPP) and serves them over SRT and to wfb-ng"
 LICENSE = "CLOSED"
 
 # Socket code shared with inference-service and overlay-service.
@@ -12,6 +12,8 @@ SRC_URI = "file://main.cpp \
            file://SrtServer.h \
            file://SrtServer.cpp \
            file://BitrateController.h \
+           file://UdpSender.h \
+           file://UdpSender.cpp \
            file://streamer-service.service \
            file://FrameHeader.h \
            file://SocketClient.h \
@@ -29,6 +31,8 @@ STREAMER_CODEC ?= "h264"
 STREAMER_BITRATE ?= "2000"
 # SRT latency in ms, the receiver's own setting counts too (the larger one is used).
 STREAMER_LATENCY ?= "50"
+# Also send the stream here, wfb_tx (wfb-video.service) listens on 127.0.0.1:5600. Empty: SRT only.
+STREAMER_UDP ?= "127.0.0.1:5600"
 
 DEPENDS = "rockchip-mpp srt"
 
@@ -40,7 +44,8 @@ inherit systemd
 
 do_compile() {
     ${CXX} ${CXXFLAGS} ${LDFLAGS} -std=c++17 -O2 \
-        ${S}/main.cpp ${S}/MppEncoder.cpp ${S}/TsMuxer.cpp ${S}/SrtServer.cpp ${S}/SocketClient.cpp \
+        ${S}/main.cpp ${S}/MppEncoder.cpp ${S}/TsMuxer.cpp ${S}/SrtServer.cpp ${S}/UdpSender.cpp \
+        ${S}/SocketClient.cpp \
         -o ${B}/streamer-service -lpthread -lrockchip_mpp -lsrt
 }
 
@@ -55,6 +60,7 @@ do_install() {
     -e 's|@@STREAMER_CODEC@@|${STREAMER_CODEC}|g' \
     -e 's|@@STREAMER_BITRATE@@|${STREAMER_BITRATE}|g' \
     -e 's|@@STREAMER_LATENCY@@|${STREAMER_LATENCY}|g' \
+    -e 's|@@STREAMER_UDP@@|${STREAMER_UDP}|g' \
     ${D}${systemd_unitdir}/system/streamer-service.service
 }
 

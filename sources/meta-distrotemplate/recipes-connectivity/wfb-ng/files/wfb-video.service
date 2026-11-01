@@ -1,0 +1,22 @@
+[Unit]
+Description=Video over WiFi broadcast (wfb-ng) on the USB Wi-Fi card
+# Starts when the card (wfb0, see rtl8812eu-driver) is plugged in, stops when it is gone.
+BindsTo=sys-subsystem-net-devices-wfb0.device
+After=sys-subsystem-net-devices-wfb0.device
+
+[Service]
+Environment=WFB_CHANNEL=@@WFB_CHANNEL@@
+Environment=WFB_TXPOWER=@@WFB_TXPOWER@@
+Environment=WFB_MCS=@@WFB_MCS@@
+Environment=WFB_PASSPHRASE=@@WFB_PASSPHRASE@@
+Environment=WFB_REGION=@@WFB_REGION@@
+# Override without rebuilding (persistent data partition), e.g.:
+#   echo WFB_CHANNEL=1 > /var/wfb-video.env
+#   WFB_TXPOWER=2000
+EnvironmentFile=-/var/wfb-video.env
+ExecStart=@@BINDIR@@/wfb-video.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=sys-subsystem-net-devices-wfb0.device

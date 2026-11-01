@@ -5,8 +5,10 @@
 // in listener mode. Receivers connect to the board, no destination to configure:
 //   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:9000?latency=50000"
 //   vlc --network-caching=50 --srt-latency=50 srt://<board-ip>:9000
-// The encoder only runs while at least one receiver is connected, its bitrate follows
-// the link between --min-bitrate and --bitrate (BitrateController).
+// With --udp the same stream also goes to wfb_tx (wfb-ng, WiFi broadcast) on this board,
+// one way over the USB Wi-Fi card; on the ground: tools/wfb-ground.sh.
+// The encoder only runs while somebody can receive (an SRT client or --udp), its bitrate
+// follows the SRT link between --min-bitrate and --bitrate (BitrateController).
 
 #include <algorithm>
 #include <chrono>
@@ -23,6 +25,7 @@
 #include "SocketClient.h"
 #include "SrtServer.h"
 #include "TsMuxer.h"
+#include "UdpSender.h"
 
 static const char *INPUT_SOCKET_PATH = "/run/renderer-service.sock";
 static const int TIMEOUT_MS = 1000;
@@ -45,12 +48,13 @@ static void usage(const char *name) {
               << " ms] [--codec h264|h265]\n"
               << "       [--bitrate " << DEFAULT_BITRATE_KBPS << " kbps] [--min-bitrate " << DEFAULT_MIN_BITRATE_KBPS
               << " kbps] [--gop <frames>, default fps] [--fps " << DEFAULT_FPS << "]\n"
+              << "       [--udp <ip>:<port>, also send MPEG-TS there, e.g. 127.0.0.1:5600 for wfb_tx]\n"
               << "The bitrate adapts to the link between --min-bitrate and --bitrate, equal values keep it fixed."
               << std::endl;
 }
 
 int main(int argc, char **argv) {
-    std::string codec = "h264";
+    std::string codec = "h264", udp_dest;
     int port = DEFAULT_PORT;
     int latency = DEFAULT_LATENCY_MS;
     int bitrate = DEFAULT_BITRATE_KBPS;
@@ -73,6 +77,8 @@ int main(int argc, char **argv) {
             gop = std::atoi(argv[++i]);
         } else if (arg == "--fps" && i + 1 < argc) {
             fps = std::atoi(argv[++i]);
+        } else if (arg == "--udp" && i + 1 < argc) {
+            udp_dest = argv[++i];
         } else {
             usage(argv[0]);
             return 1;
@@ -96,6 +102,14 @@ int main(int argc, char **argv) {
         return 1;
     std::cout << "Serving " << codec << " MPEG-TS on srt://0.0.0.0:" << port << " (latency " << latency << " ms)"
               << std::endl;
+
+    // An empty --udp (e.g. from the unit file) disables it.
+    UdpSender udp;
+    if (!udp_dest.empty()) {
+        if (!udp.open(udp_dest))
+            return 1;
+        std::cout << "Sending " << codec << " MPEG-TS to udp://" << udp_dest << std::endl;
+    }
 
     SocketClient input;
     if (!input.init(INPUT_SOCKET_PATH)) {
@@ -121,7 +135,7 @@ int main(int argc, char **argv) {
             encoder.requestKeyframe();
 
         // Nobody watching, leave the encoder idle.
-        if (server.clients() == 0) {
+        if (server.clients() == 0 && udp_dest.empty()) {
             ::close(fd);
             encoder.close();
             continue;
@@ -153,6 +167,8 @@ int main(int argc, char **argv) {
             std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count();
         const auto &ts = muxer.mux(encoded.data(), encoded.size(), now_us * 9 / 100);
         if (!server.send(ts.data(), ts.size()))
+            send_errors++;
+        if (!udp_dest.empty() && !udp.send(ts.data(), ts.size()))
             send_errors++;
 
         double elapsed = ms_since(window);
