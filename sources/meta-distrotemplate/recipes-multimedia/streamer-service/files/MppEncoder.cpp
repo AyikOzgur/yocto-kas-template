@@ -1,6 +1,7 @@
 #define MODULE_TAG "streamer"
 
 #include "MppEncoder.h"
+#include "FrameHeader.h"
 
 #include <iostream>
 
@@ -37,15 +38,19 @@ MppEncoder::~MppEncoder() {
     close();
 }
 
-bool MppEncoder::open(int width, int height) {
+bool MppEncoder::open(int width, int height, uint32_t fourcc, int fps) {
     close();
 
     // VEPU needs the YUYV stride to be the width aligned to 8 pixels; the overlay
     // buffers are tightly packed, so the width must already be aligned.
-    if (width % 8 != 0 || height % 2 != 0) {
-        std::cerr << "[mpp] unsupported size " << width << "x" << height << std::endl;
+    if (width % 8 != 0 || height % 2 != 0 || (fourcc != FOURCC_YUYV && fourcc != FOURCC_UYVY) || fps <= 0) {
+        std::cerr << "[mpp] unsupported input " << width << "x" << height << " " << fourccName(fourcc) << " @ "
+                  << fps << " fps" << std::endl;
         return false;
     }
+    m_fourcc = fourcc;
+    m_fps = fps;
+    const int gop = m_gop > 0 ? m_gop : fps;
 
     MppCtx c = nullptr;
     MppApi *mpi = nullptr;
@@ -68,8 +73,9 @@ bool MppEncoder::open(int width, int height) {
     mpp_enc_cfg_set_s32(cfg, "prep:height", height);
     mpp_enc_cfg_set_s32(cfg, "prep:hor_stride", width * 2); // bytes for packed YUYV
     mpp_enc_cfg_set_s32(cfg, "prep:ver_stride", height);
-    mpp_enc_cfg_set_s32(cfg, "prep:format", MPP_FMT_YUV422_YUYV);
-    // Camera YUYV is limited (TV) range.
+    mpp_enc_cfg_set_s32(cfg, "prep:format", m_fourcc == FOURCC_UYVY ? MPP_FMT_YUV422_UYVY : MPP_FMT_YUV422_YUYV);
+    // Limited (TV) range: the USB grabber delivers it, the Rockchip ISP is switched to it
+    // (camera-setup.sh in camera-service).
     mpp_enc_cfg_set_s32(cfg, "prep:range", MPP_FRAME_RANGE_MPEG);
 
     // Constant bitrate keeps the stream steady over Wi-Fi, frame drops off.
@@ -82,7 +88,7 @@ bool MppEncoder::open(int width, int height) {
     mpp_enc_cfg_set_s32(cfg, "rc:fps_out_flex", 0);
     mpp_enc_cfg_set_s32(cfg, "rc:fps_out_num", m_fps);
     mpp_enc_cfg_set_s32(cfg, "rc:fps_out_denom", 1);
-    mpp_enc_cfg_set_s32(cfg, "rc:gop", m_gop);
+    mpp_enc_cfg_set_s32(cfg, "rc:gop", gop);
 
     if (!m_hevc) {
         mpp_enc_cfg_set_s32(cfg, "h264:profile", 100); // high
@@ -110,8 +116,9 @@ bool MppEncoder::open(int width, int height) {
 
     m_width = width;
     m_height = height;
-    std::cout << "[mpp] " << (m_hevc ? "H.265" : "H.264") << " " << width << "x" << height << " YUYV, "
-              << m_bitrate_kbps << " kbps CBR, gop " << m_gop << " @ " << m_fps << " fps" << std::endl;
+    std::cout << "[mpp] " << (m_hevc ? "H.265" : "H.264") << " " << width << "x" << height << " "
+              << fourccName(m_fourcc) << ", " << m_bitrate_kbps << " kbps CBR, gop " << gop << " @ " << m_fps
+              << " fps" << std::endl;
     return true;
 }
 
@@ -194,7 +201,7 @@ const std::vector<uint8_t> &MppEncoder::encode(int dma_buf_fd, uint32_t length) 
     mpp_frame_set_height(frame, m_height);
     mpp_frame_set_hor_stride(frame, m_width * 2);
     mpp_frame_set_ver_stride(frame, m_height);
-    mpp_frame_set_fmt(frame, MPP_FMT_YUV422_YUYV);
+    mpp_frame_set_fmt(frame, m_fourcc == FOURCC_UYVY ? MPP_FMT_YUV422_UYVY : MPP_FMT_YUV422_YUYV);
     mpp_frame_set_buffer(frame, static_cast<MppBuffer>(it->second.buffer));
     mpp_frame_set_eos(frame, 0);
 

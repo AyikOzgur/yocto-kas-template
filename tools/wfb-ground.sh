@@ -15,6 +15,9 @@
 #   sudo apt install libpcap-dev libsodium-dev
 #   git clone -b release-25.01 https://github.com/svpcom/wfb-ng.git && cd wfb-ng
 #   make wfb_rx wfb_keygen && sudo install -m 0755 wfb_rx wfb_keygen /usr/local/bin
+# An RTL8812EU adapter (like the drone's) gets its driver built and loaded here, once per
+# kernel, which needs git, a compiler and the kernel headers:
+#   sudo apt install git build-essential linux-headers-$(uname -r)
 set -euo pipefail
 
 CHANNEL=${WFB_CHANNEL:-149}
@@ -22,12 +25,70 @@ PASSPHRASE=${WFB_PASSPHRASE:-wfb-video}
 PLAYER=${PLAYER:-ffplay}
 PORT=5600
 
+# svpcom's RTL8812EU driver at the commit of the drone image (rtl8812eu-driver recipe).
+RTL8812EU_GIT=https://github.com/svpcom/rtl8812eu.git
+RTL8812EU_BRANCH=v5.15.0.1
+RTL8812EU_COMMIT=48e6e449e089fa954e4e15079bd864039e2960da
+
 for tool in iw wfb_rx wfb_keygen; do
     if ! command -v $tool >/dev/null; then
         echo "$tool not found, see the top of $0 for how to install it." >&2
         exit 1
     fi
 done
+
+rtl8812eu_plugged() {
+    local dev
+    for dev in /sys/bus/usb/devices/*; do
+        [ "$(cat "$dev/idVendor" 2>/dev/null)" = 0bda ] && [ "$(cat "$dev/idProduct" 2>/dev/null)" = a81a ] &&
+            return 0
+    done
+    return 1
+}
+
+# The RTL8812EU has no driver in the mainline kernel: build svpcom's for the running kernel
+# (cached in ~/.cache/wfb-ground, rebuilt after a kernel update) and load it with the drone's
+# options. An installed one (e.g. DKMS) is used as is.
+load_rtl8812eu() {
+    rtl8812eu_plugged || return 0
+    [ -d /sys/module/8812eu ] && return 0
+    local options="rtw_regd_src=1 rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0"
+    if modinfo 8812eu >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        sudo modprobe 8812eu $options
+    else
+        local kernel dir
+        kernel=$(uname -r)
+        dir=${XDG_CACHE_HOME:-$HOME/.cache}/wfb-ground/rtl8812eu-${RTL8812EU_COMMIT:0:7}-$kernel
+        if [ ! -f "$dir/8812eu.ko" ]; then
+            if [ ! -d "/lib/modules/$kernel/build" ]; then
+                echo "Kernel headers missing for the RTL8812EU driver, see the top of $0." >&2
+                exit 1
+            fi
+            echo "Building the RTL8812EU driver for kernel $kernel (once, in $dir)"
+            rm -rf "$dir"
+            git clone -q --single-branch -b $RTL8812EU_BRANCH $RTL8812EU_GIT "$dir"
+            git -C "$dir" -c advice.detachedHead=false checkout -q $RTL8812EU_COMMIT
+            if ! make -C "$dir" -j"$(nproc)" KSRC="/lib/modules/$kernel/build" KVER="$kernel" \
+                KCFLAGS=-Wno-error modules >"$dir/build.log" 2>&1; then
+                echo "RTL8812EU driver build failed, see $dir/build.log" >&2
+                exit 1
+            fi
+        fi
+        # With Secure Boot on, an unsigned module is refused ("Key was rejected by service").
+        # shellcheck disable=SC2086
+        sudo insmod "$dir/8812eu.ko" $options
+    fi
+    # Its interface shows up a moment later.
+    local dev
+    for _ in $(seq 1 20); do
+        for dev in /sys/class/net/*; do
+            [ "$(basename "$(readlink -f "$dev/device/driver")")" = rtl88x2eu ] && return 0
+        done
+        sleep 0.5
+    done
+}
+load_rtl8812eu
 
 IFACE=${1:-}
 if [ -z "$IFACE" ]; then
@@ -61,13 +122,28 @@ trap cleanup EXIT
 (cd "$KEYS" && wfb_keygen "$PASSPHRASE" 2>/dev/null)
 
 sudo -v
+# A card that was connected to a network can capture only a trickle in monitor mode afterwards
+# (MT7925: about 5 instead of 70 frames per second), a fresh driver load clears that. Only for
+# installed drivers, a hand loaded (insmod) one could not be loaded again.
+DRIVER=$(basename "$(readlink -f "/sys/class/net/$IFACE/device/driver/module")")
+if modinfo "$DRIVER" >/dev/null 2>&1 && sudo modprobe -r "$DRIVER" 2>/dev/null; then
+    sudo modprobe "$DRIVER"
+    for _ in $(seq 1 20); do
+        [ -e "/sys/class/net/$IFACE" ] && break
+        sleep 0.5
+    done
+fi
 # Keep NetworkManager away from the adapter while it is in monitor mode.
 if command -v nmcli >/dev/null && nmcli -t -f DEVICE device | grep -qx "$IFACE"; then
     sudo nmcli device set "$IFACE" managed no
     NM_MANAGED=yes
 fi
-sudo ip link set "$IFACE" down
-sudo iw dev "$IFACE" set type monitor
+# NetworkManager may still be busy with a freshly loaded card for a moment.
+for _ in 1 2 3 4 5; do
+    sudo ip link set "$IFACE" down
+    sudo iw dev "$IFACE" set type monitor 2>/dev/null && break
+    sleep 1
+done
 sudo ip link set "$IFACE" up
 sudo iw dev "$IFACE" set channel "$CHANNEL" HT20
 echo "Receiving on $IFACE, channel $CHANNEL -> udp://127.0.0.1:$PORT"

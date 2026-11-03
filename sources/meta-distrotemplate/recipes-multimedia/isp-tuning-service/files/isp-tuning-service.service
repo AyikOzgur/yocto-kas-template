@@ -1,0 +1,23 @@
+[Unit]
+Description=Rockchip ISP tuning (colors, white balance, exposure)
+# The ISP only measures its statistics when they are configured at stream start: be ready
+# (Type=notify) before camera-service streams, and restart together with it.
+Before=camera-service.service
+PartOf=camera-service.service
+
+[Service]
+Type=notify
+Environment=ISP_TUNING_ARGS=
+# From the camera preset (see camera-service.service), e.g. brighter, less gain:
+#   ISP_TUNING_ARGS=--ae-target 0.2 --max-gain 1600
+EnvironmentFile=-/etc/camera/default.env
+EnvironmentFile=-/var/camera.env
+ExecStart=@@BINDIR@@/isp-tuning-service $ISP_TUNING_ARGS
+# Exits when the ISP stops, back within 100 ms for its next start (camera-service restarts
+# after 2 s). Exits cleanly without the ISP (mainline kernel).
+Restart=on-failure
+RestartSec=100ms
+
+[Install]
+# Started whenever camera-service starts (also after a stop), so before it streams.
+WantedBy=camera-service.service

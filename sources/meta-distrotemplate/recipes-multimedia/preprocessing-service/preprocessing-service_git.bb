@@ -1,10 +1,10 @@
 DESCRIPTION = "Vulkan YUYV to RGB letterbox preprocessing service"
 LICENSE = "CLOSED"
 
-SRC_URI = "git://git@github.com/AyikOzgur/preprocessing-service.git;protocol=ssh;branch=main \
+SRC_URI = "git://git@github.com/AyikOzgur/preprocessing-service.git;protocol=ssh;branch=radxa-camera-support \
            file://preprocessing-service.service"
 
-# Follow latest main while testing, pin to a commit for releases.
+# Follow the branch while testing, pin to a commit for releases.
 SRCREV = "${AUTOREV}"
 PV = "1.0+git"
 

@@ -1,10 +1,10 @@
 DESCRIPTION = "Overlay service"
 LICENSE = "CLOSED"
 
-SRC_URI = "gitsm://git@github.com/AyikOzgur/overlay-service.git;protocol=ssh;branch=osd-abstraction \
+SRC_URI = "gitsm://git@github.com/AyikOzgur/overlay-service.git;protocol=ssh;branch=radxa-camera-support \
            file://overlay-service.service"
 
-# Follow latest main while testing, pin to a commit for releases.
+# Follow the branch while testing, pin to a commit for releases.
 SRCREV = "${AUTOREV}"
 PV = "1.0+git"
 

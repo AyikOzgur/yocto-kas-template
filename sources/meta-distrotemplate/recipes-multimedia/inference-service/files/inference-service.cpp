@@ -398,9 +398,10 @@ int main(int argc, char **argv) {
         auto t0 = Clock::now();
 
         struct stat st{};
-        if (fstat(fd, &st) < 0 || (int)hdr.width != in_w || (int)hdr.height != in_h ||
-            hdr.length < in_attr.size_with_stride) {
-            printf("Unexpected frame %ux%u len %u\n", hdr.width, hdr.height, hdr.length);
+        if (fstat(fd, &st) < 0 || hdr.fourcc != FOURCC_RGB24 || (int)hdr.width != in_w ||
+            (int)hdr.height != in_h || hdr.length < in_attr.size_with_stride) {
+            printf("Unexpected frame %ux%u %s len %u\n", hdr.width, hdr.height, fourccName(hdr.fourcc).c_str(),
+                   hdr.length);
             ::close(fd);
             continue;
         }

@@ -13,6 +13,8 @@ SRC_URI = " \
     https://github.com/radxa/kernel/archive/${RADXA_KERNEL_COMMIT}.tar.gz;downloadfilename=radxa-kernel-${RADXA_KERNEL_COMMIT}.tar.gz \
     file://panfrost.cfg \
     file://cma-heap.cfg \
+    file://arducam-pivariety.cfg \
+    file://0001-media-i2c-add-Arducam-Pivariety-driver.patch \
     file://radxa-zero-3w-vendor.dtsi \
 "
 SRC_URI[sha256sum] = "5f4dd2214520b73b864ff486e2f78b528f2078d47285de50a4fac28ab81806d3"

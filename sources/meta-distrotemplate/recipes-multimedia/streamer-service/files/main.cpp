@@ -1,6 +1,6 @@
 // Streamer service.
 //
-// Encodes overlay-service frames (YUYV dma-bufs, imported without copies) to H.264 or
+// Encodes overlay-service frames (YUYV or UYVY dma-bufs, imported without copies) to H.264 or
 // H.265 on the Rockchip VEPU (MPP, vendor kernel) and serves them as MPEG-TS over SRT
 // in listener mode. Receivers connect to the board, no destination to configure:
 //   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:9000?latency=50000"
@@ -8,11 +8,14 @@
 // With --udp the same stream also goes to wfb_tx (wfb-ng, WiFi broadcast) on this board,
 // one way over the USB Wi-Fi card; on the ground: tools/wfb-ground.sh.
 // The encoder only runs while somebody can receive (an SRT client or --udp), its bitrate
-// follows the SRT link between --min-bitrate and --bitrate (BitrateController).
+// follows the SRT link between --min-bitrate and --bitrate (BitrateController). Frame size
+// and pixel format come from the frame headers, the frame rate from their arrival times.
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
+#include <deque>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -35,7 +38,8 @@ static const int DEFAULT_PORT = 9000;
 static const int DEFAULT_LATENCY_MS = 50;
 static const int DEFAULT_BITRATE_KBPS = 2000;
 static const int DEFAULT_MIN_BITRATE_KBPS = 500;
-static const int DEFAULT_FPS = 25;
+// Frames to measure the input frame rate over.
+static const size_t FPS_WINDOW = 30;
 
 using Clock = std::chrono::steady_clock;
 
@@ -47,7 +51,7 @@ static void usage(const char *name) {
     std::cout << "Usage: " << name << " [--port " << DEFAULT_PORT << "] [--latency " << DEFAULT_LATENCY_MS
               << " ms] [--codec h264|h265]\n"
               << "       [--bitrate " << DEFAULT_BITRATE_KBPS << " kbps] [--min-bitrate " << DEFAULT_MIN_BITRATE_KBPS
-              << " kbps] [--gop <frames>, default fps] [--fps " << DEFAULT_FPS << "]\n"
+              << " kbps] [--gop <frames>, default one second]\n"
               << "       [--udp <ip>:<port>, also send MPEG-TS there, e.g. 127.0.0.1:5600 for wfb_tx]\n"
               << "The bitrate adapts to the link between --min-bitrate and --bitrate, equal values keep it fixed."
               << std::endl;
@@ -59,7 +63,6 @@ int main(int argc, char **argv) {
     int latency = DEFAULT_LATENCY_MS;
     int bitrate = DEFAULT_BITRATE_KBPS;
     int min_bitrate = DEFAULT_MIN_BITRATE_KBPS;
-    int fps = DEFAULT_FPS;
     int gop = 0;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -75,8 +78,6 @@ int main(int argc, char **argv) {
             min_bitrate = std::atoi(argv[++i]);
         } else if (arg == "--gop" && i + 1 < argc) {
             gop = std::atoi(argv[++i]);
-        } else if (arg == "--fps" && i + 1 < argc) {
-            fps = std::atoi(argv[++i]);
         } else if (arg == "--udp" && i + 1 < argc) {
             udp_dest = argv[++i];
         } else {
@@ -84,17 +85,15 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
-    // One IDR per second by default, new receivers get one right away anyway.
-    if (gop == 0)
-        gop = fps;
     const bool hevc = codec == "h265";
     if ((codec != "h264" && !hevc) || port <= 0 || port > 65535 || latency < 0 || bitrate <= 0 ||
-        min_bitrate <= 0 || fps <= 0 || gop <= 0) {
+        min_bitrate <= 0 || gop < 0) {
         usage(argv[0]);
         return 1;
     }
 
-    MppEncoder encoder(hevc, bitrate, gop, fps);
+    // One IDR per second by default (gop 0), new receivers get one right away anyway.
+    MppEncoder encoder(hevc, bitrate, gop);
     TsMuxer muxer(hevc);
     SrtServer server;
     BitrateController bitrate_control(min_bitrate, bitrate, latency);
@@ -121,14 +120,20 @@ int main(int argc, char **argv) {
     double encode_ms = 0, max_ms = 0;
     size_t bytes = 0;
     auto window = Clock::now();
+    // Arrival times of the last frames: the input frame rate, set by the camera.
+    std::deque<Clock::time_point> arrivals;
 
     while (true) {
         FrameHeader hdr{};
         int fd = -1;
         if (!input.recvFrame(hdr, fd, TIMEOUT_MS)) {
             std::cout << "No frame in " << TIMEOUT_MS << " ms" << std::endl;
+            arrivals.clear();
             continue;
         }
+        arrivals.push_back(Clock::now());
+        if (arrivals.size() > FPS_WINDOW)
+            arrivals.pop_front();
 
         // Start new receivers at a keyframe instead of waiting for the next GOP.
         if (server.acceptClients() > 0)
@@ -141,10 +146,19 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        if (!encoder.isOpen() || encoder.width() != (int)hdr.width || encoder.height() != (int)hdr.height) {
-            if (!encoder.open(hdr.width, hdr.height)) {
+        // Frame size, format and rate come from the frames; (re)open when they change.
+        if (arrivals.size() < FPS_WINDOW) {
+            ::close(fd);
+            continue;
+        }
+        const double span_s = std::chrono::duration<double>(arrivals.back() - arrivals.front()).count();
+        const int fps = std::max(1, (int)std::lround((arrivals.size() - 1) / span_s));
+        if (!encoder.isOpen() || encoder.width() != (int)hdr.width || encoder.height() != (int)hdr.height ||
+            encoder.fourcc() != hdr.fourcc || std::abs(encoder.fps() - fps) > encoder.fps() / 5) {
+            if (!encoder.open(hdr.width, hdr.height, hdr.fourcc, fps)) {
                 ::close(fd);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
+                arrivals.clear(); // the pause is not the frame rate
                 continue;
             }
         }

@@ -5,26 +5,30 @@
 #include <vector>
 
 /// H.264 / H.265 encoder on the Rockchip VEPU through MPP (vendor kernel, /dev/mpp_service).
-/// YUYV dma-bufs are imported into MPP once and reused (no copy, no conversion).
+/// YUYV (or UYVY) dma-bufs are imported into MPP once and reused (no copy, no conversion).
 /// Low latency setup: no B frames, one packet per frame, SPS/PPS(/VPS) before every IDR
 /// so a receiver can join at any keyframe.
 class MppEncoder {
 public:
     /** @param hevc H.265 instead of H.264.
      *  @param bitrate_kbps Constant bitrate target.
-     *  @param gop Frames between IDR frames (join / recovery time).
-     *  @param fps Input frame rate, for rate control.
+     *  @param gop Frames between IDR frames (join / recovery time), 0: one second.
      */
-    MppEncoder(bool hevc, int bitrate_kbps, int gop, int fps)
-        : m_hevc(hevc), m_bitrate_kbps(bitrate_kbps), m_gop(gop), m_fps(fps) {}
+    MppEncoder(bool hevc, int bitrate_kbps, int gop)
+        : m_hevc(hevc), m_bitrate_kbps(bitrate_kbps), m_gop(gop) {}
     ~MppEncoder();
 
-    /// Open for width x height YUYV input (stride width * 2).
-    bool open(int width, int height);
+    /** @brief Open for width x height packed 4:2:2 input (stride width * 2).
+     *  @param fourcc FOURCC_YUYV or FOURCC_UYVY (FrameHeader.h).
+     *  @param fps Input frame rate, for rate control.
+     */
+    bool open(int width, int height, uint32_t fourcc, int fps);
     void close();
     bool isOpen() const { return m_ctx != nullptr; }
     int width() const { return m_width; }
     int height() const { return m_height; }
+    uint32_t fourcc() const { return m_fourcc; }
+    int fps() const { return m_fps; }
 
     /// Encode the next frame as IDR, e.g. for a receiver that just joined.
     void requestKeyframe();
@@ -50,7 +54,8 @@ private:
     bool m_hevc;
     int m_bitrate_kbps;
     int m_gop;
-    int m_fps;
+    int m_fps{0};
+    uint32_t m_fourcc{0};
     void *m_ctx{nullptr}; // MppCtx
     void *m_mpi{nullptr}; // MppApi *
     int m_width{0};
