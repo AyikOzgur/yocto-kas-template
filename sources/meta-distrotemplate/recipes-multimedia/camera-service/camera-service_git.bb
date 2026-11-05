@@ -1,7 +1,7 @@
 DESCRIPTION = "V4L2 capture service, shares dma-buf frames over unix socket"
 LICENSE = "CLOSED"
 
-SRC_URI = "git://git@github.com/AyikOzgur/camera-service.git;protocol=ssh;branch=radxa-camera-support \
+SRC_URI = "git://git@github.com/AyikOzgur/camera-service.git;protocol=ssh;branch=main \
            file://camera-service.service \
            file://camera-setup.sh \
            file://90-rkisp-camera.rules \
@@ -10,7 +10,7 @@ SRC_URI = "git://git@github.com/AyikOzgur/camera-service.git;protocol=ssh;branch
 "
 
 # Follow the branch while testing, pin to a commit for releases.
-SRCREV = "${AUTOREV}"
+SRCREV = "17d2ddb5b4cd245850ec6f399d03af0108c3e7af"
 PV = "1.0+git"
 
 S = "${WORKDIR}/git"
