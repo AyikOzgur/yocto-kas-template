@@ -1,7 +1,8 @@
 [Unit]
 Description=Rockchip ISP tuning (colors, white balance, exposure)
 # The ISP only measures its statistics when they are configured at stream start: be ready
-# (Type=notify) before camera-service streams, and restart together with it.
+# (Type=notify) before camera-service streams, and restart together with it. After
+# camera-setup.service (ordered there), which sets the sensor mode read here.
 Before=camera-service.service
 PartOf=camera-service.service
 
@@ -10,6 +11,7 @@ Type=notify
 Environment=ISP_TUNING_ARGS=
 # From the camera preset (see camera-service.service), e.g. brighter, less gain:
 #   ISP_TUNING_ARGS=--ae-target 0.2 --max-gain 1600
+# (gain in the sensor's analogue_gain units: IMX462 100 = 1x, IMX219 256 = 1x)
 EnvironmentFile=-/etc/camera/default.env
 EnvironmentFile=-/var/camera.env
 ExecStart=@@BINDIR@@/isp-tuning-service $ISP_TUNING_ARGS

@@ -4,7 +4,9 @@ LICENSE = "CLOSED"
 SRC_URI = "git://git@github.com/AyikOzgur/camera-service.git;protocol=ssh;branch=main \
            file://camera-service.service \
            file://camera-setup.sh \
+           file://camera-setup.service \
            file://90-rkisp-camera.rules \
+           file://cameras/csi-imx219.env \
            file://cameras/csi-imx462.env \
            file://cameras/usb-grabber.env \
 "
@@ -21,13 +23,15 @@ CAMERA ?= "usb-grabber"
 
 inherit cmake systemd
 
-SYSTEMD_SERVICE:${PN} = "camera-service.service"
+SYSTEMD_SERVICE:${PN} = "camera-service.service camera-setup.service"
 SYSTEMD_AUTO_ENABLE = "enable"
 
 do_install:append () {
     install -d ${D}${systemd_unitdir}/system
-    install -m 0644 ${WORKDIR}/camera-service.service ${D}${systemd_unitdir}/system
-    sed -i -e 's|@@BINDIR@@|${bindir}|g' ${D}${systemd_unitdir}/system/camera-service.service
+    for unit in camera-service.service camera-setup.service; do
+        install -m 0644 ${WORKDIR}/$unit ${D}${systemd_unitdir}/system
+        sed -i -e 's|@@BINDIR@@|${bindir}|g' ${D}${systemd_unitdir}/system/$unit
+    done
 
     install -d ${D}${sysconfdir}/camera
     install -m 0644 ${WORKDIR}/cameras/*.env ${D}${sysconfdir}/camera/
@@ -40,4 +44,4 @@ do_install:append () {
     install -D -m 0644 ${WORKDIR}/90-rkisp-camera.rules ${D}${sysconfdir}/udev/rules.d/90-rkisp-camera.rules
 }
 
-FILES:${PN} += "${systemd_unitdir}/system/camera-service.service"
+FILES:${PN} += "${systemd_unitdir}/system/camera-service.service ${systemd_unitdir}/system/camera-setup.service"

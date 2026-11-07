@@ -11,9 +11,10 @@ local_conf_header:
   vendor-kernel: |
     # RKNPU is built into the vendor kernel, the out-of-tree port is mainline only.
     IMAGE_INSTALL:remove = "rknpu-driver"
-    # CSI camera through the Rockchip ISP (camera-service preset, the USB grabber is
-    # usb-grabber; switching at runtime: see camera-service.service).
-    CAMERA = "csi-imx462"
+    # CSI camera through the Rockchip ISP (camera-service preset, also selects the sensor in
+    # the device tree): csi-imx219 or csi-imx462 (Arducam Pivariety). The USB grabber is
+    # usb-grabber (switching at runtime: see camera-service.service).
+    CAMERA = "csi-imx219"
     # Hardware H.264/H.265 encoder library and its test tools.
     IMAGE_INSTALL:append = " rockchip-mpp rockchip-mpp-tests"
     # Colors, white balance and exposure for the CSI camera through the Rockchip ISP.

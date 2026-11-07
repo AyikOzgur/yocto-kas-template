@@ -1,0 +1,28 @@
+
+/*
+ * Sony IMX219 module (CAMERA = "csi-imx219"), e.g. Arducam B0179 or Raspberry Pi Camera V2,
+ * through a 15 to 22 pin cable. Rockchip's imx219 driver, which refuses to probe without
+ * the rockchip,camera-module-* properties.
+ */
+&i2c2 {
+    camera-imx219@10 {
+        compatible = "sony,imx219";
+        reg = <0x10>;
+        clocks = <&clk_cam_24m>;
+        clock-names = "xvclk";
+        rockchip,camera-module-index = <0>;
+        rockchip,camera-module-facing = "back";
+        rockchip,camera-module-name = "default";
+        rockchip,camera-module-lens-name = "default";
+
+        port {
+            camera_out: endpoint {
+                remote-endpoint = <&mipi_in_camera>;
+                data-lanes = <1 2>;
+                clock-noncontinuous;
+                /* The driver's only link frequency (912 Mbps per lane). */
+                link-frequencies = /bits/ 64 <456000000>;
+            };
+        };
+    };
+};

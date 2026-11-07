@@ -1,0 +1,175 @@
+From: Ozgur Ayik <ozgur.ayik@swarmer.tech>
+Subject: [PATCH] media: i2c: imx219: add a 720p60 mode and the Bayer order of the flips
+
+Rockchip's IMX219 driver tops out at 30 fps. Add a 1280x720 mode at 60 fps, 2x2 binned
+from a centered 2560x1440 crop, with the clocks and line length of the other modes.
+
+The driver always reported RGGB, but the flips change the Bayer order (the readout starts
+at the other end of the crop window): report it like the mainline driver does, so the ISP
+demosaics a flipped (180 degree) image with the right colors.
+
+---
+diff --git a/drivers/media/i2c/imx219.c b/drivers/media/i2c/imx219.c
+index 5ee99ea0a..6618bd682 100644
+--- a/drivers/media/i2c/imx219.c
++++ b/drivers/media/i2c/imx219.c
+@@ -319,6 +319,81 @@ static const struct imx219_reg mode_640_480_regs[] = {
+ 	{IMX219_TABLE_END, 0x00},
+ };
+ 
++/*
++ * MCLK:24MHz  1280x720  60fps  MIPI LANE2
++ * 2x2 binned from a centered 2560x1440 crop (sensor width minus 360 pixels per side,
++ * a wider field of view than the 1920x1080 crop). Same clocks and
++ * line length as the other modes (182.4 MHz pixel rate, 3448 pixels per line), frame
++ * length 881 lines: 182400000 / (3448 * 881) = 60.04 fps.
++ */
++static const struct imx219_reg mode_1280_720_60fps_regs[] = {
++	{0x0100, 0x00},
++	{0x30eb, 0x05},
++	{0x30eb, 0x0c},
++	{0x300a, 0xff},
++	{0x300b, 0xff},
++	{0x30eb, 0x05},
++	{0x30eb, 0x09},
++	{0x0114, 0x01},
++	{0x0128, 0x00},
++	{0x012a, 0x18},
++	{0x012b, 0x00},
++	{0x0160, 0x03},
++	{0x0161, 0x71},
++	{0x0162, 0x0d},
++	{0x0163, 0x78},
++	{0x0164, 0x01},
++	{0x0165, 0x68},
++	{0x0166, 0x0b},
++	{0x0167, 0x67},
++	{0x0168, 0x02},
++	{0x0169, 0x00},
++	{0x016a, 0x07},
++	{0x016b, 0x9f},
++	{0x016c, 0x05},
++	{0x016d, 0x00},
++	{0x016e, 0x02},
++	{0x016f, 0xd0},
++	{0x0170, 0x01},
++	{0x0171, 0x01},
++	{0x0172, 0x00},
++	{0x0174, 0x01},
++	{0x0175, 0x01},
++	{0x0176, 0x01},
++	{0x0177, 0x01},
++	{0x018C, 0x0a},
++	{0x018D, 0x0a},
++	{0x0301, 0x05},
++	{0x0303, 0x01},
++	{0x0304, 0x03},
++	{0x0305, 0x03},
++	{0x0306, 0x00},
++	{0x0307, 0x39},
++	{0x0309, 0x0a},
++	{0x030b, 0x01},
++	{0x030c, 0x00},
++	{0x030d, 0x72},
++	{0x0624, 0x05},
++	{0x0625, 0x00},
++	{0x0626, 0x02},
++	{0x0627, 0xd0},
++	{0x455e, 0x00},
++	{0x471e, 0x4b},
++	{0x4767, 0x0f},
++	{0x4750, 0x14},
++	{0x4540, 0x00},
++	{0x47b4, 0x14},
++	{0x4713, 0x30},
++	{0x478b, 0x10},
++	{0x478f, 0x10},
++	{0x4793, 0x10},
++	{0x4797, 0x0e},
++	{0x479b, 0x0e},
++	{0x0162, 0x0d},
++	{0x0163, 0x78},
++	{IMX219_TABLE_END, 0x00},
++};
++
+ static const struct imx219_reg start[] = {
+ 	{0x0100, 0x01},		/* mode select streaming on */
+ 	{IMX219_TABLE_END, 0x00}
+@@ -439,9 +514,37 @@ static const struct imx219_mode supported_modes[] = {
+ 		.hts_def = 0x0d78 - IMX219_EXP_LINES_MARGIN,
+ 		.vts_def = 0x0437,
+ 		.reg_list = mode_640_480_regs,
++	},
++	{
++		/* 2x2 binned 60fps mode */
++		.width = 1280,
++		.height = 720,
++		.max_fps = {
++			.numerator = 10000,
++			.denominator = 600000,
++		},
++		.hts_def = 0x0d78 - IMX219_EXP_LINES_MARGIN,
++		.vts_def = 0x0371,
++		.reg_list = mode_1280_720_60fps_regs,
+ 	}
+ };
+ 
++/*
++ * The flips start the readout at the other end of the crop window, which changes the
++ * Bayer order (the windows start on even rows and columns: RGGB without flips).
++ */
++static u32 imx219_bayer_code(const struct imx219 *priv)
++{
++	static const u32 codes[] = {
++		MEDIA_BUS_FMT_SRGGB10_1X10,	/* no flip */
++		MEDIA_BUS_FMT_SGRBG10_1X10,	/* hflip */
++		MEDIA_BUS_FMT_SGBRG10_1X10,	/* vflip */
++		MEDIA_BUS_FMT_SBGGR10_1X10,	/* hflip + vflip */
++	};
++
++	return codes[(priv->vflip ? 2 : 0) | (priv->hflip ? 1 : 0)];
++}
++
+ static struct imx219 *to_imx219(const struct i2c_client *client)
+ {
+ 	return container_of(i2c_get_clientdata(client), struct imx219, subdev);
+@@ -805,9 +908,11 @@ static int imx219_enum_mbus_code(struct v4l2_subdev *sd,
+ 				 struct v4l2_subdev_state *sd_state,
+ 				 struct v4l2_subdev_mbus_code_enum *code)
+ {
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++
+ 	if (code->index != 0)
+ 		return -EINVAL;
+-	code->code = MEDIA_BUS_FMT_SRGGB10_1X10;
++	code->code = imx219_bayer_code(to_imx219(client));
+ 
+ 	return 0;
+ }
+@@ -853,7 +958,7 @@ static int imx219_set_fmt(struct v4l2_subdev *sd,
+ 		return 0;
+ 
+ 	mode = imx219_find_best_fit(fmt);
+-	fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
++	fmt->format.code = imx219_bayer_code(priv);
+ 	fmt->format.width = mode->width;
+ 	fmt->format.height = mode->height;
+ 	fmt->format.field = V4L2_FIELD_NONE;
+@@ -897,7 +1002,7 @@ static int imx219_get_fmt(struct v4l2_subdev *sd,
+ 
+ 	fmt->format.width = mode->width;
+ 	fmt->format.height = mode->height;
+-	fmt->format.code = MEDIA_BUS_FMT_SRGGB10_1X10;
++	fmt->format.code = imx219_bayer_code(priv);
+ 	fmt->format.field = V4L2_FIELD_NONE;
+ 
+ 	return 0;
+@@ -996,7 +1101,7 @@ static int imx219_enum_frame_interval(struct v4l2_subdev *sd,
+ 	if (fie->index >= priv->cfg_num)
+ 		return -EINVAL;
+ 
+-	if (fie->code != MEDIA_BUS_FMT_SRGGB10_1X10)
++	if (fie->code != imx219_bayer_code(priv))
+ 		return -EINVAL;
+ 
+ 	fie->width = supported_modes[fie->index].width;

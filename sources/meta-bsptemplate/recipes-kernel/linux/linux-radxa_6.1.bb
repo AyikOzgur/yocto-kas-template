@@ -15,7 +15,11 @@ SRC_URI = " \
     file://cma-heap.cfg \
     file://arducam-pivariety.cfg \
     file://0001-media-i2c-add-Arducam-Pivariety-driver.patch \
+    file://0002-media-i2c-imx219-add-720p60-mode-and-flip-aware-Bayer-order.patch \
     file://radxa-zero-3w-vendor.dtsi \
+    file://camera-csi.dtsi \
+    file://camera-csi-imx462.dtsi \
+    file://camera-csi-imx219.dtsi \
 "
 SRC_URI[sha256sum] = "5f4dd2214520b73b864ff486e2f78b528f2078d47285de50a4fac28ab81806d3"
 
@@ -48,12 +52,30 @@ do_kernel_checkout:prepend() {
 
 DTS_FILE = "${S}/arch/arm64/boot/dts/rockchip/rk3566-radxa-zero-3w-aic8800ds2.dts"
 
+# CSI camera in the device tree: CAMERA = "csi-<sensor>" (the camera-service preset) adds
+# camera-csi.dtsi and camera-csi-<sensor>.dtsi, other cameras (USB) none.
+CAMERA ?= "usb-grabber"
+
 do_configure:append() {
-    # Append our board fragment to the vendor device tree, once.
-    if ! grep -q "BEGIN radxa-zero-3w-vendor.dtsi" ${DTS_FILE}; then
-        echo "/* BEGIN radxa-zero-3w-vendor.dtsi */" >> ${DTS_FILE}
-        cat ${WORKDIR}/radxa-zero-3w-vendor.dtsi >> ${DTS_FILE}
+    # Our board fragments on top of the vendor device tree, rebuilt from the original every
+    # time (the kernel source is shared and survives a CAMERA change). Older builds appended
+    # to the file in place: their original is everything before the marker (which can share
+    # the last line, the vendor file has no final newline).
+    if [ ! -e ${DTS_FILE}.orig ]; then
+        sed -e '/BEGIN radxa-zero-3w-vendor.dtsi/{s|/\* BEGIN radxa-zero-3w-vendor.dtsi \*/.*||;q}' \
+            ${DTS_FILE} > ${DTS_FILE}.orig
     fi
+    cp ${DTS_FILE}.orig ${DTS_FILE}
+    printf '\n/* BEGIN radxa-zero-3w-vendor.dtsi */\n' >> ${DTS_FILE}
+    cat ${WORKDIR}/radxa-zero-3w-vendor.dtsi >> ${DTS_FILE}
+    case "${CAMERA}" in
+    csi-*)
+        if [ ! -e ${WORKDIR}/camera-${CAMERA}.dtsi ]; then
+            bbfatal "CAMERA = \"${CAMERA}\" has no camera-${CAMERA}.dtsi"
+        fi
+        cat ${WORKDIR}/camera-csi.dtsi ${WORKDIR}/camera-${CAMERA}.dtsi >> ${DTS_FILE}
+        ;;
+    esac
 }
 
 # Same A/B boot layout as the mainline kernel.

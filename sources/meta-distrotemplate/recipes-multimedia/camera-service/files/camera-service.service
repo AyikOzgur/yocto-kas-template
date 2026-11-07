@@ -8,9 +8,9 @@ Description=Camera capture service
 # partition), then restart camera-service:
 #   ln -sf /etc/camera/usb-grabber.env /var/camera.env
 # Single settings work too, e.g. echo CAMERA_ROTATION=0 > /var/camera.env
+# Sensor flips and mode, ISP formats: camera-setup.service, started before this one.
 EnvironmentFile=/etc/camera/default.env
 EnvironmentFile=-/var/camera.env
-ExecStartPre=-@@BINDIR@@/camera-setup.sh ${CAMERA_ROTATION}
 ExecStart=@@BINDIR@@/camera-service --video ${CAMERA_VIDEO} --dma-heap /dev/dma_heap/system --width ${CAMERA_WIDTH} --height ${CAMERA_HEIGHT} --fps ${CAMERA_FPS}
 Restart=always
 RestartSec=2
