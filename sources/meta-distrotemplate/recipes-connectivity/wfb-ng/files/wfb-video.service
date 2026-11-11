@@ -5,6 +5,9 @@ BindsTo=sys-subsystem-net-devices-wfb0.device
 After=sys-subsystem-net-devices-wfb0.device
 
 [Service]
+# Ready (wfb-video.sh) once the card is set up, the MAVLink links start after that.
+Type=notify
+NotifyAccess=all
 Environment=WFB_CHANNEL=@@WFB_CHANNEL@@
 Environment=WFB_TXPOWER=@@WFB_TXPOWER@@
 Environment=WFB_MCS=@@WFB_MCS@@

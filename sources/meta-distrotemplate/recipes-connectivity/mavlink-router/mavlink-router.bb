@@ -2,7 +2,9 @@ DESCRIPTION = "Mavlink router"
 LICENSE = "CLOSED"
 
 SRC_URI = "gitsm://git@github.com/mavlink-router/mavlink-router.git;protocol=ssh;branch=master \
-           file://mavlink-router.service"
+           file://mavlink-router.service \
+           file://main.conf \
+"
 
 # Follow latest main while testing, pin to a commit for releases.
 SRCREV = "${AUTOREV}"
@@ -33,6 +35,8 @@ do_install:append () {
     sed -i \
     -e 's|@@UART_DEVICE@@|${UART_DEVICE}|g' \
     ${D}${systemd_unitdir}/system/mavlink-router.service
+
+    install -D -m 0644 ${WORKDIR}/main.conf ${D}${sysconfdir}/mavlink-router/main.conf
 }
 
 FILES:${PN} += "${systemd_unitdir}/system/mavlink-router.service"

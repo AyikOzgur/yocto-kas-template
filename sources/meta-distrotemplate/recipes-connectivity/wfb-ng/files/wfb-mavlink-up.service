@@ -1,0 +1,15 @@
+[Unit]
+Description=MAVLink commands over WiFi broadcast (wfb-ng), ground to drone
+# The card is set up by wfb-video.service (monitor mode, channel, keys).
+After=wfb-video.service
+PartOf=wfb-video.service
+
+[Service]
+# Commands of the ground station (tools/wfb-ground.sh) from radio port 144 (0x90) to
+# mavlink-router (UDP 5611, see its main.conf). The log counts the received packets.
+ExecStart=@@BINDIR@@/wfb_rx -K /run/wfb/drone.key -p 144 -c 127.0.0.1 -u 5611 wfb0
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=wfb-video.service

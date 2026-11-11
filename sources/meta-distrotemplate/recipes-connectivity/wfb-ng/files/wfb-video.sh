@@ -29,6 +29,8 @@ if [ "$WFB_CHANNEL" = 1 ]; then OTHER=6; else OTHER=1; fi
 iw dev $IFACE set channel $OTHER HT20
 iw dev $IFACE set channel "$WFB_CHANNEL" HT20
 iw dev $IFACE set txpower fixed "$WFB_TXPOWER"
+# The card is ready, also for wfb-mavlink-down / -up.service.
+systemd-notify --ready
 
 # 20 MHz, long guard interval, no STBC / LDPC: any single antenna receiver can
 # decode it. -T 2: close a FEC block 2 ms after the last packet of
