@@ -1,6 +1,7 @@
 #!/bin/bash
 # Ground station for the wfb-ng link: puts a USB Wi-Fi adapter in monitor mode on the drone's
-# channel, receives the video with wfb_rx and plays the MPEG-TS with low latency. MAVLink goes
+# channel, receives the video with wfb_rx and plays it with low latency: RTP (H.264 / H.265,
+# streamer-service's default) or MPEG-TS (older images), the first packet tells. MAVLink goes
 # both ways on the same adapter: QGroundControl connects by itself (UDP 14550), the adapter
 # transmits its commands (only an adapter that can inject, e.g. RTL8812AU / RTL8812EU).
 #
@@ -228,6 +229,30 @@ while True:
 PIDS+=($!)
 echo "MAVLink on udp://127.0.0.1:$GCS_PORT (QGroundControl), statistics in $MAVLINK_LOG"
 
+# What the drone sends, from its first video packet: MPEG-TS (sync byte 0x47) or RTP
+# (version 2) with payload type 96 (H.264) or 97 (H.265), streamer-service --udp-format.
+VIDEO=ts
+if [ "$PLAYER" = ffplay ] || [ "$PLAYER" = gst ]; then
+    echo "Waiting for the first video packet..."
+    VIDEO=$(python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(('127.0.0.1', $PORT))
+d = s.recv(65535)
+if d[0] != 0x47 and d[0] >> 6 == 2:
+    print('h265' if d[1] & 0x7f == 97 else 'h264')
+else:
+    print('ts')
+")
+    echo "Video: $([ "$VIDEO" = ts ] && echo MPEG-TS || echo "RTP $VIDEO")"
+fi
+RTP_PT=96
+RTP_CODEC=H264
+[ "$VIDEO" = h265 ] && RTP_PT=97 && RTP_CODEC=H265
+# ffmpeg needs an SDP file to know what a dynamic RTP payload type carries.
+printf 'v=0\no=- 0 0 IN IP4 127.0.0.1\ns=wfb-ng\nc=IN IP4 127.0.0.1\nt=0 0\nm=video %s RTP/AVP %s\na=rtpmap:%s %s/90000\n' \
+    $PORT $RTP_PT $RTP_PT $RTP_CODEC >"$KEYS/video.sdp"
+
 case "$PLAYER" in
 ffplay)
     # No probing and no buffering; setpts=0 shows every frame as soon as it is decoded
@@ -238,14 +263,26 @@ ffplay)
     # video, fifo_size=0 turns off ffmpeg's own 5 MB UDP buffer: the rest is dropped by the
     # kernel (socket buffer of buffer_size bytes, about a second), and the picture is live
     # again within about two seconds.
-    ffplay -hide_banner -loglevel warning -fflags nobuffer -flags low_delay -framedrop -noinfbuf \
-        -probesize 32 -analyzeduration 0 -vf setpts=0 -window_title "wfb-ng channel $CHANNEL" \
-        "udp://127.0.0.1:$PORT?fifo_size=0&buffer_size=262144"
+    PLAY_ARGS=(-hide_banner -loglevel warning -fflags nobuffer -flags low_delay -framedrop -noinfbuf
+        -probesize 32 -analyzeduration 0 -vf setpts=0 -window_title "wfb-ng channel $CHANNEL")
+    if [ "$VIDEO" = ts ]; then
+        ffplay "${PLAY_ARGS[@]}" "udp://127.0.0.1:$PORT?fifo_size=0&buffer_size=262144"
+    else
+        # RTP: no reordering queue, a late packet is lost anyway.
+        ffplay "${PLAY_ARGS[@]}" -protocol_whitelist file,udp,rtp -reorder_queue_size 0 \
+            -buffer_size 262144 "$KEYS/video.sdp"
+    fi
     ;;
 gst)
-    # tsdemux adds 700 ms by default.
-    gst-launch-1.0 -q udpsrc port=$PORT ! tsdemux latency=0 ! decodebin ! videoconvert ! \
-        autovideosink sync=false
+    if [ "$VIDEO" = ts ]; then
+        # tsdemux adds 700 ms by default.
+        gst-launch-1.0 -q udpsrc port=$PORT ! tsdemux latency=0 ! decodebin ! videoconvert ! \
+            autovideosink sync=false
+    else
+        gst-launch-1.0 -q udpsrc port=$PORT \
+            caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=$RTP_CODEC,payload=$RTP_PT" ! \
+            "rtp${VIDEO}depay" ! decodebin ! videoconvert ! autovideosink sync=false
+    fi
     ;;
 *)
     wait "$RX_PID"

@@ -5,8 +5,9 @@
 // in listener mode. Receivers connect to the board, no destination to configure:
 //   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:9000?latency=50000"
 //   vlc --network-caching=50 --srt-latency=50 srt://<board-ip>:9000
-// With --udp the same stream also goes to wfb_tx (wfb-ng, WiFi broadcast) on this board,
-// one way over the USB Wi-Fi card; on the ground: tools/wfb-ground.sh.
+// With --udp the same video also goes to wfb_tx (wfb-ng, WiFi broadcast) on this board,
+// one way over the USB Wi-Fi card, as RTP (default, what PixelPilot on Android plays) or
+// MPEG-TS (--udp-format ts); on the ground: tools/wfb-ground.sh plays both.
 // The encoder only runs while somebody can receive (an SRT client or --udp), its bitrate
 // follows the SRT link between --min-bitrate and --bitrate (BitrateController). Frame size
 // and pixel format come from the frame headers, the frame rate from their arrival times.
@@ -25,6 +26,7 @@
 #include "BitrateController.h"
 #include "FrameHeader.h"
 #include "MppEncoder.h"
+#include "RtpPacketizer.h"
 #include "SocketClient.h"
 #include "SrtServer.h"
 #include "TsMuxer.h"
@@ -52,13 +54,14 @@ static void usage(const char *name) {
               << " ms] [--codec h264|h265]\n"
               << "       [--bitrate " << DEFAULT_BITRATE_KBPS << " kbps] [--min-bitrate " << DEFAULT_MIN_BITRATE_KBPS
               << " kbps] [--gop <frames>, default one second]\n"
-              << "       [--udp <ip>:<port>, also send MPEG-TS there, e.g. 127.0.0.1:5600 for wfb_tx]\n"
+              << "       [--udp <ip>:<port>, also send the video there, e.g. 127.0.0.1:5600 for wfb_tx]\n"
+              << "       [--udp-format rtp|ts, default rtp]\n"
               << "The bitrate adapts to the link between --min-bitrate and --bitrate, equal values keep it fixed."
               << std::endl;
 }
 
 int main(int argc, char **argv) {
-    std::string codec = "h264", udp_dest;
+    std::string codec = "h264", udp_dest, udp_format = "rtp";
     int port = DEFAULT_PORT;
     int latency = DEFAULT_LATENCY_MS;
     int bitrate = DEFAULT_BITRATE_KBPS;
@@ -80,13 +83,16 @@ int main(int argc, char **argv) {
             gop = std::atoi(argv[++i]);
         } else if (arg == "--udp" && i + 1 < argc) {
             udp_dest = argv[++i];
+        } else if (arg == "--udp-format" && i + 1 < argc) {
+            udp_format = argv[++i];
         } else {
             usage(argv[0]);
             return 1;
         }
     }
     const bool hevc = codec == "h265";
-    if ((codec != "h264" && !hevc) || port <= 0 || port > 65535 || latency < 0 || bitrate <= 0 ||
+    const bool udp_rtp = udp_format == "rtp";
+    if ((codec != "h264" && !hevc) || (!udp_rtp && udp_format != "ts") || port <= 0 || port > 65535 || latency < 0 || bitrate <= 0 ||
         min_bitrate <= 0 || gop < 0) {
         usage(argv[0]);
         return 1;
@@ -95,6 +101,7 @@ int main(int argc, char **argv) {
     // One IDR per second by default (gop 0), new receivers get one right away anyway.
     MppEncoder encoder(hevc, bitrate, gop);
     TsMuxer muxer(hevc);
+    RtpPacketizer rtp(hevc);
     SrtServer server;
     BitrateController bitrate_control(min_bitrate, bitrate, latency);
     if (!server.listen(port, latency))
@@ -107,7 +114,8 @@ int main(int argc, char **argv) {
     if (!udp_dest.empty()) {
         if (!udp.open(udp_dest))
             return 1;
-        std::cout << "Sending " << codec << " MPEG-TS to udp://" << udp_dest << std::endl;
+        std::cout << "Sending " << codec << (udp_rtp ? " RTP" : " MPEG-TS") << " to udp://" << udp_dest
+                  << std::endl;
     }
 
     SocketClient input;
@@ -176,14 +184,25 @@ int main(int argc, char **argv) {
         encode_ms += ms;
         max_ms = std::max(max_ms, ms);
 
-        // 90 kHz clock for PTS / PCR.
+        // 90 kHz clock for PTS / PCR and the RTP timestamp.
         const auto now_us =
             std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count();
-        const auto &ts = muxer.mux(encoded.data(), encoded.size(), now_us * 9 / 100);
-        if (!server.send(ts.data(), ts.size()))
-            send_errors++;
-        if (!udp_dest.empty() && !udp.send(ts.data(), ts.size()))
-            send_errors++;
+        const uint64_t pts = now_us * 9 / 100;
+        // MPEG-TS only when somebody takes it: SRT clients, or --udp-format ts.
+        if (server.clients() > 0 || (!udp_dest.empty() && !udp_rtp)) {
+            const auto &ts = muxer.mux(encoded.data(), encoded.size(), pts);
+            if (server.clients() > 0 && !server.send(ts.data(), ts.size()))
+                send_errors++;
+            if (!udp_dest.empty() && !udp_rtp && !udp.sendTs(ts.data(), ts.size()))
+                send_errors++;
+        }
+        if (!udp_dest.empty() && udp_rtp) {
+            bool ok = true;
+            rtp.packetize(encoded.data(), encoded.size(), static_cast<uint32_t>(pts),
+                          [&](const uint8_t *packet, size_t size) { ok &= udp.sendDatagram(packet, size); });
+            if (!ok)
+                send_errors++;
+        }
 
         double elapsed = ms_since(window);
         if (elapsed >= 1000.0) {

@@ -41,12 +41,16 @@ bool UdpSender::open(const std::string &dest) {
     return true;
 }
 
-bool UdpSender::send(const uint8_t *data, size_t size) {
+bool UdpSender::sendTs(const uint8_t *data, size_t size) {
     bool ok = true;
     for (size_t offset = 0; offset < size; offset += CHUNK_SIZE) {
-        // Fails (ECONNREFUSED) while nobody listens, e.g. no Wi-Fi card plugged in; keep going.
-        if (::send(m_sock, data + offset, std::min(CHUNK_SIZE, size - offset), 0) < 0)
+        if (!sendDatagram(data + offset, std::min(CHUNK_SIZE, size - offset)))
             ok = false;
     }
     return ok;
+}
+
+bool UdpSender::sendDatagram(const uint8_t *data, size_t size) {
+    // Fails (ECONNREFUSED) while nobody listens, e.g. no Wi-Fi card plugged in; keep going.
+    return ::send(m_sock, data, size, 0) >= 0;
 }

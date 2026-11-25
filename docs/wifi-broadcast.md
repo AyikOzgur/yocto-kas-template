@@ -95,7 +95,10 @@ tools/wfb-ground.sh wlp194s0       # a specific adapter, e.g. the built-in one
 ```
 
 - The video opens in `ffplay`. `PLAYER=gst` uses GStreamer, `PLAYER=none` only receives
-  (MPEG-TS on `udp://127.0.0.1:5600`).
+  (RTP on `udp://127.0.0.1:5600`, payload type 96 for H.264, 97 for H.265).
+- The drone sends RTP, the format OpenIPC's PixelPilot app on Android plays.
+  `STREAMER_UDP_FORMAT=ts` in `/var/streamer-service.env` switches it to MPEG-TS; the script
+  plays both, also from older images.
 - Start QGroundControl: it connects by itself (UDP 14550).
 - Ctrl+C or closing the player ends it and gives the adapter back to the system.
 
@@ -141,7 +144,8 @@ shows which ones are busy.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| `PKT 0:0:0:…` only | Nothing received | Same channel on both sides? Drone transmitting (step 2 check)? Try another channel or adapter |
+| `PKT 0:0:0:…` only | Nothing received | On the drone, `journalctl -u wfb-video -n 2 -o cat`: zeros there too means it has no video to send, see the next row. Otherwise: same channel on both sides? Try another channel or adapter |
+| Drone's `PKT` zeros, camera-service logs `No frame yet` | The CSI camera delivers no frames (`dmesg` shows a burst of `MIPI error`) | Power off, reseat the camera ribbon cable at both ends, check it for kinks, power on |
 | Decryption errors count up | Passphrases differ | Set the same `WFB_PASSPHRASE` on both sides |
 | Many lost packets at short range | Signal too strong, or a busy channel | Move a few metres apart, lower `WFB_TXPOWER`, change channel |
 | `Cannot find device`, `socket error!`, `not in monitor mode` | The adapter dropped off USB | `journalctl -k \| grep 'USB disconnect'`; check its cable and power |

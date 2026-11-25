@@ -9,6 +9,7 @@ Environment=STREAMER_CODEC=@@STREAMER_CODEC@@
 Environment=STREAMER_BITRATE=@@STREAMER_BITRATE@@
 Environment=STREAMER_LATENCY=@@STREAMER_LATENCY@@
 Environment=STREAMER_UDP=@@STREAMER_UDP@@
+Environment=STREAMER_UDP_FORMAT=@@STREAMER_UDP_FORMAT@@
 Environment=STREAMER_EXTRA_ARGS=
 # Override without rebuilding (persistent data partition), e.g.:
 #   echo STREAMER_CODEC=h265 > /var/streamer-service.env
@@ -19,10 +20,12 @@ Environment=STREAMER_EXTRA_ARGS=
 #   STREAMER_EXTRA_ARGS=--min-bitrate 800
 # SRT only, nothing to wfb_tx:
 #   STREAMER_UDP=
+# MPEG-TS instead of RTP to wfb_tx (RTP is what PixelPilot on Android plays):
+#   STREAMER_UDP_FORMAT=ts
 # Watch from any machine (receiver latency in us, the larger side wins):
 #   ffplay -fflags nobuffer -flags low_delay -framedrop "srt://<board-ip>:<port>?latency=50000"
 EnvironmentFile=-/var/streamer-service.env
-ExecStart=@@BINDIR@@/streamer-service --port ${STREAMER_PORT} --codec ${STREAMER_CODEC} --bitrate ${STREAMER_BITRATE} --latency ${STREAMER_LATENCY} --udp "${STREAMER_UDP}" $STREAMER_EXTRA_ARGS
+ExecStart=@@BINDIR@@/streamer-service --port ${STREAMER_PORT} --codec ${STREAMER_CODEC} --bitrate ${STREAMER_BITRATE} --latency ${STREAMER_LATENCY} --udp "${STREAMER_UDP}" --udp-format ${STREAMER_UDP_FORMAT} $STREAMER_EXTRA_ARGS
 Restart=always
 RestartSec=2
 

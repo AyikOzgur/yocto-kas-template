@@ -14,6 +14,8 @@ SRC_URI = "file://main.cpp \
            file://BitrateController.h \
            file://UdpSender.h \
            file://UdpSender.cpp \
+           file://RtpPacketizer.h \
+           file://RtpPacketizer.cpp \
            file://streamer-service.service \
            file://FrameHeader.h \
            file://SocketClient.h \
@@ -33,6 +35,8 @@ STREAMER_BITRATE ?= "2000"
 STREAMER_LATENCY ?= "50"
 # Also send the stream here, wfb_tx (wfb-video.service) listens on 127.0.0.1:5600. Empty: SRT only.
 STREAMER_UDP ?= "127.0.0.1:5600"
+# Format sent there: rtp (PixelPilot on Android, and tools/wfb-ground.sh) or ts (MPEG-TS).
+STREAMER_UDP_FORMAT ?= "rtp"
 
 DEPENDS = "rockchip-mpp srt"
 
@@ -44,7 +48,7 @@ inherit systemd
 
 do_compile() {
     ${CXX} ${CXXFLAGS} ${LDFLAGS} -std=c++17 -O2 \
-        ${S}/main.cpp ${S}/MppEncoder.cpp ${S}/TsMuxer.cpp ${S}/SrtServer.cpp ${S}/UdpSender.cpp \
+        ${S}/main.cpp ${S}/MppEncoder.cpp ${S}/TsMuxer.cpp ${S}/SrtServer.cpp ${S}/UdpSender.cpp ${S}/RtpPacketizer.cpp \
         ${S}/SocketClient.cpp \
         -o ${B}/streamer-service -lpthread -lrockchip_mpp -lsrt
 }
@@ -61,6 +65,7 @@ do_install() {
     -e 's|@@STREAMER_BITRATE@@|${STREAMER_BITRATE}|g' \
     -e 's|@@STREAMER_LATENCY@@|${STREAMER_LATENCY}|g' \
     -e 's|@@STREAMER_UDP@@|${STREAMER_UDP}|g' \
+    -e 's|@@STREAMER_UDP_FORMAT@@|${STREAMER_UDP_FORMAT}|g' \
     ${D}${systemd_unitdir}/system/streamer-service.service
 }
 
