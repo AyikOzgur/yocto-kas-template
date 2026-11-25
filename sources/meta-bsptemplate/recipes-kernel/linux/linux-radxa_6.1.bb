@@ -16,14 +16,14 @@ SRC_URI = " \
     file://arducam-pivariety.cfg \
     file://0001-media-i2c-add-Arducam-Pivariety-driver.patch \
     file://0002-media-i2c-imx219-add-720p60-mode-and-flip-aware-Bayer-order.patch \
-    file://radxa-zero-3w-vendor.dtsi \
+    file://radxa-zero-3w.dtsi \
     file://camera-csi.dtsi \
     file://camera-csi-imx462.dtsi \
     file://camera-csi-imx219.dtsi \
 "
 SRC_URI[sha256sum] = "5f4dd2214520b73b864ff486e2f78b528f2078d47285de50a4fac28ab81806d3"
 
-FILESEXTRAPATHS:prepend := "${THISDIR}/files/vendor:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 LINUX_VERSION = "6.1"
 PV = "${LINUX_VERSION}+git"
@@ -57,17 +57,14 @@ DTS_FILE = "${S}/arch/arm64/boot/dts/rockchip/rk3566-radxa-zero-3w-aic8800ds2.dt
 CAMERA ?= "usb-grabber"
 
 do_configure:append() {
-    # Our board fragments on top of the vendor device tree, rebuilt from the original every
-    # time (the kernel source is shared and survives a CAMERA change). Older builds appended
-    # to the file in place: their original is everything before the marker (which can share
-    # the last line, the vendor file has no final newline).
+    # Our board fragments on top of Radxa's device tree, rebuilt from the original every
+    # time (the kernel source is shared and survives a CAMERA change).
     if [ ! -e ${DTS_FILE}.orig ]; then
-        sed -e '/BEGIN radxa-zero-3w-vendor.dtsi/{s|/\* BEGIN radxa-zero-3w-vendor.dtsi \*/.*||;q}' \
-            ${DTS_FILE} > ${DTS_FILE}.orig
+        cp ${DTS_FILE} ${DTS_FILE}.orig
     fi
     cp ${DTS_FILE}.orig ${DTS_FILE}
-    printf '\n/* BEGIN radxa-zero-3w-vendor.dtsi */\n' >> ${DTS_FILE}
-    cat ${WORKDIR}/radxa-zero-3w-vendor.dtsi >> ${DTS_FILE}
+    printf '\n/* BEGIN radxa-zero-3w.dtsi */\n' >> ${DTS_FILE}
+    cat ${WORKDIR}/radxa-zero-3w.dtsi >> ${DTS_FILE}
     case "${CAMERA}" in
     csi-*)
         if [ ! -e ${WORKDIR}/camera-${CAMERA}.dtsi ]; then
@@ -78,7 +75,7 @@ do_configure:append() {
     esac
 }
 
-# Same A/B boot layout as the mainline kernel.
+# A/B boot: one kernel per slot on the boot partition (see the machine's extlinux labels).
 do_deploy:append() {
     if [ -e ${DEPLOYDIR}/fitImage ]; then
         install -m 0644 ${DEPLOYDIR}/fitImage ${DEPLOYDIR}/fitImageA
@@ -86,4 +83,8 @@ do_deploy:append() {
     fi
 }
 
-COMPATIBLE_MACHINE = "radxa-zero-3w-vendor"
+# The kernel lives on the boot partition (fitImageA/B), not in the rootfs: don't let
+# kernel-base pull kernel-image into /boot of the rootfs.
+RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+
+COMPATIBLE_MACHINE = "radxa-zero-3w"

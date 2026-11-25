@@ -17,7 +17,7 @@ inherit module
 
 do_compile() {
     # The driver's own Makefile (it needs its directory as TopDIR), generic arm64
-    # platform instead of the default x86 PC one. The vendor kernel builds with
+    # platform instead of the default x86 PC one. The kernel builds with
     # CONFIG_WERROR, the Realtek code has warnings (KCFLAGS come last, so this wins).
     oe_runmake -C ${S} \
         CONFIG_PLATFORM_I386_PC=n CONFIG_PLATFORM_ARM64_RPI=y \
@@ -44,5 +44,4 @@ FILES:${PN} = " \
 
 RPROVIDES:${PN} += "kernel-module-8812eu-${KERNEL_VERSION}"
 
-# The video link (MPP encoder) is vendor kernel only anyway.
-COMPATIBLE_MACHINE = "radxa-zero-3w-vendor"
+COMPATIBLE_MACHINE = "radxa-zero-3w"

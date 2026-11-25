@@ -16,7 +16,7 @@ EnvironmentFile=-/etc/camera/default.env
 EnvironmentFile=-/var/camera.env
 ExecStart=@@BINDIR@@/isp-tuning-service $ISP_TUNING_ARGS
 # Exits when the ISP stops, back within 100 ms for its next start (camera-service restarts
-# after 2 s). Exits cleanly without the ISP (mainline kernel).
+# after 2 s). Exits cleanly without the ISP (no CSI camera).
 Restart=on-failure
 RestartSec=100ms
 

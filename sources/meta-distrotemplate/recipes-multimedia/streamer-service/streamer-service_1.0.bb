@@ -41,7 +41,7 @@ STREAMER_UDP_FORMAT ?= "rtp"
 DEPENDS = "rockchip-mpp srt"
 
 # MPP needs the vendor kernel (/dev/mpp_service).
-COMPATIBLE_MACHINE = "radxa-zero-3w-vendor"
+COMPATIBLE_MACHINE = "radxa-zero-3w"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 inherit systemd

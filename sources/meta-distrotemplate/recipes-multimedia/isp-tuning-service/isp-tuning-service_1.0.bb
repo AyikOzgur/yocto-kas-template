@@ -8,7 +8,7 @@ SRC_URI = "file://main.cpp \
 S = "${WORKDIR}"
 
 # The Rockchip ISP uapi headers come from the vendor kernel, not from linux-libc-headers.
-COMPATIBLE_MACHINE = "radxa-zero-3w-vendor"
+COMPATIBLE_MACHINE = "radxa-zero-3w"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 do_compile[depends] += "virtual/kernel:do_shared_workdir"
 

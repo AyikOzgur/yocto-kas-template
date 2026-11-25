@@ -23,4 +23,4 @@ PACKAGES =+ "${PN}-tests"
 FILES:${PN}-tests = "${bindir}"
 
 # Needs the vendor kernel's mpp_service driver.
-COMPATIBLE_MACHINE = "radxa-zero-3w-vendor"
+COMPATIBLE_MACHINE = "radxa-zero-3w"

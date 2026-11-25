@@ -4,7 +4,7 @@
  * appended by linux-radxa_6.1.bb.
  */
 
-/* Serial console on ttyS2 1500000 like the mainline image (Radxa leaves it off). */
+/* Serial console on ttyS2 1500000 (Radxa leaves it off). */
 &uart2 {
     status = "okay";
 };

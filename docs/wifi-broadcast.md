@@ -33,13 +33,13 @@ A bare module needs a USB-A port (a USB-C port may not supply power to it).
 
 ## 2. Drone
 
-Build the vendor image and flash it:
+Build the image and flash it:
 
 ```sh
-kas build boards/radxa-zero-3w-vendor.yml
+kas build boards/radxa-zero-3w.yml
 ```
 
-The image is in `build/tmp-glibc/deploy/images/radxa-zero-3w-vendor/` (`.wic` for a full
+The image is in `build/tmp-glibc/deploy/images/radxa-zero-3w/` (`.wic` for a full
 flash, `.swu` for an update). Nothing has to be configured on the board. After boot, check:
 
 ```sh
