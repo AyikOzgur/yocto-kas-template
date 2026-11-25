@@ -1,0 +1,67 @@
+
+/*
+ * Board adjustments on top of Radxa's rk3566-radxa-zero-3w-aic8800ds2.dts,
+ * appended by linux-radxa_6.1.bb.
+ */
+
+/* Serial console on ttyS2 1500000 (Radxa leaves it off). */
+&uart2 {
+    status = "okay";
+};
+
+/*
+ * Flight controller MAVLink on ttyS4 (UART4-M1, header pin 16 RX, pin 18 TX).
+ * The SoC dtsi defaults to the M0 pins, which aren't on the header.
+ */
+&uart4 {
+    pinctrl-names = "default";
+    pinctrl-0 = <&uart4m1_xfer>;
+    status = "okay";
+};
+
+/*
+ * Wi-Fi on the external antenna connector (U.FL) instead of the onboard chip antenna.
+ * The RF switch is held by board_antenna: the vendor dts drives GPIO3_D3 low (onboard),
+ * Radxa's radxa-zero3-external-antenna overlay drives GPIO3_D2 low instead. Same here.
+ * Off for now: the onboard Wi-Fi uses the chip antenna, both external antennas go to
+ * the RTL8812EU (wfb-ng video). Uncomment to switch back.
+ */
+// &board_antenna {
+//     gpio = <&gpio3 RK_PD2 GPIO_ACTIVE_LOW>;
+// };
+//
+// &ant_1 {
+//     rockchip,pins = <3 RK_PD2 RK_FUNC_GPIO &pcfg_pull_down>;
+// };
+
+/* NPU and its IOMMU are disabled in the vendor dtsi (Radxa enables them with an overlay). */
+&rknpu {
+    status = "okay";
+};
+
+&rknpu_mmu {
+    status = "okay";
+};
+
+/*
+ * Default CMA area, also exported as /dev/dma_heap/linux,cma (preprocessing output).
+ * Below 4 GiB for 32-bit DMA masters (0xf0000000+ is MMIO).
+ */
+&reserved_memory {
+    linux,cma {
+        compatible = "shared-dma-pool";
+        reusable;
+        size = <0x0 0x8000000>; /* 128 MiB */
+        alloc-ranges = <0x0 0x0 0x0 0xf0000000>;
+        linux,cma-default;
+    };
+};
+
+/*
+ * USB 2.0 OTG Type-C port as host (USB camera). Radxa leaves it in "otg" with the role
+ * taken from the PHY's ID/VBUS detection, which ends up as peripheral on this board.
+ * The board is powered from the header, so the port isn't needed for power or gadget mode.
+ */
+&usbdrd_dwc3 {
+    dr_mode = "host";
+};

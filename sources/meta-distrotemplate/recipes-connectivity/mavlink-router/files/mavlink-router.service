@@ -1,0 +1,10 @@
+[Unit]
+Description=Mavlink router service
+
+[Service]
+ExecStart=mavlink-routerd @@UART_DEVICE@@ -t 5760 --verbose
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

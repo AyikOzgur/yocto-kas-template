@@ -1,0 +1,100 @@
+
+/*
+ * CSI camera on the 22-pin connector (2 MIPI lanes), appended by linux-radxa_6.1.bb for
+ * CAMERA = "csi-<sensor>", followed by camera-csi-<sensor>.dtsi: the sensor node on I2C2
+ * (I2C2-M1) with its endpoint labeled camera_out.
+ * Power switched by GPIO3_C6, CSI D-PHY straight into the ISP. The ISP output is the
+ * video node named rkisp_mainpath (/dev/video-camera0).
+ */
+/ {
+    /* The sensor drivers want a 24 MHz clock, the modules have their own oscillator. */
+    clk_cam_24m: external-camera-clock-24m {
+        compatible = "fixed-clock";
+        clock-frequency = <24000000>;
+        clock-output-names = "clk_cam_24m";
+        #clock-cells = <0>;
+    };
+
+    camera_pwdn_gpio: camera-pwdn-gpio {
+        compatible = "regulator-fixed";
+        regulator-name = "camera_pwdn_gpio";
+        regulator-always-on;
+        regulator-boot-on;
+        enable-active-high;
+        gpio = <&gpio3 RK_PC6 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+&i2c2 {
+    status = "okay";
+    pinctrl-names = "default";
+    pinctrl-0 = <&i2c2m1_xfer>;
+    #address-cells = <1>;
+    #size-cells = <0>;
+};
+
+&csi2_dphy_hw {
+    status = "okay";
+};
+
+&csi2_dphy0 {
+    status = "okay";
+
+    ports {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        port@0 {
+            reg = <0>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            mipi_in_camera: endpoint@1 {
+                reg = <1>;
+                remote-endpoint = <&camera_out>;
+                data-lanes = <1 2>;
+            };
+        };
+
+        port@1 {
+            reg = <1>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            dphy0_out: endpoint@1 {
+                reg = <1>;
+                remote-endpoint = <&isp0_in>;
+            };
+        };
+    };
+};
+
+&rkisp_vir0 {
+    status = "okay";
+
+    port {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        isp0_in: endpoint@0 {
+            reg = <0>;
+            remote-endpoint = <&dphy0_out>;
+        };
+    };
+};
+
+&rkisp {
+    status = "okay";
+};
+
+&rkisp_mmu {
+    status = "okay";
+};
+
+&rkcif {
+    status = "okay";
+};
+
+&rkcif_mmu {
+    status = "okay";
+};

@@ -1,0 +1,8 @@
+# The USB Wi-Fi card is the wfb-ng video card (wfb-video.service): fixed name wfb0
+# instead of systemd's predictable one (wlu1, wlx<mac>). The onboard Wi-Fi is SDIO.
+[Match]
+Type=wlan
+Property=ID_BUS=usb
+
+[Link]
+Name=wfb0

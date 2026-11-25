@@ -1,0 +1,16 @@
+[Unit]
+Description=Camera setup (sensor flips and mode, ISP formats)
+# Before anything opens the camera: isp-tuning-service reads the sensor mode, camera-service
+# streams. Runs again whenever camera-service starts (WantedBy) or restarts (PartOf).
+Before=isp-tuning-service.service camera-service.service
+PartOf=camera-service.service
+
+[Service]
+Type=oneshot
+# The camera preset, see camera-service.service.
+EnvironmentFile=/etc/camera/default.env
+EnvironmentFile=-/var/camera.env
+ExecStart=-@@BINDIR@@/camera-setup.sh
+
+[Install]
+WantedBy=camera-service.service

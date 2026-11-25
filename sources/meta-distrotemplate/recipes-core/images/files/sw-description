@@ -9,13 +9,13 @@ software = {
         local slot_a = {
             name = \"slot-a\",
             device = \"/dev/mmcblk1p10\",
-            kernel = \"/boot/fitImageA\"
+            kernel = \"/fitImageA\"
         }
 
         local slot_b = {
             name = \"slot-b\",
             device = \"/dev/mmcblk1p11\",
-            kernel = \"/boot/fitImageB\"
+            kernel = \"/fitImageB\"
         }
 
         local bootlimit = \"2\"
@@ -121,11 +121,19 @@ software = {
             hook = "select_inactive_rootfs";
         },
         {
+            # Kernel of the inactive slot on the boot partition. SWUpdate mounts it
+            # itself, so this doesn't depend on /boot being mounted. Written to a
+            # .tmp file and renamed, a power cut leaves the old kernel in place.
             filename = "fitImage";
             type = "rawfile";
-            path = "/boot/fitImage";
+            device = "/dev/disk/by-partlabel/boot";
+            filesystem = "vfat";
+            path = "/fitImage";
             sha256 = "$swupdate_get_sha256(fitImage)";
             hook = "select_inactive_kernel";
+            properties = {
+                atomic-install = "true";
+            };
         }
     );
 };

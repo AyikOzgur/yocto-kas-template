@@ -1,0 +1,23 @@
+
+/*
+ * Arducam IMX462 Pivariety module (CAMERA = "csi-imx462"). An MCU on the module (address
+ * 0x0c) runs the sensor, configured like Raspberry Pi's arducam-pivariety overlay.
+ */
+&i2c2 {
+    camera-pivariety@c {
+        compatible = "arducam,arducam-pivariety";
+        reg = <0x0c>;
+        clocks = <&clk_cam_24m>;
+        clock-names = "xclk";
+
+        port {
+            camera_out: endpoint {
+                remote-endpoint = <&mipi_in_camera>;
+                data-lanes = <1 2>;
+                clock-noncontinuous;
+                /* Same as the Raspberry Pi overlay; sets the D-PHY timing and ISP clock. */
+                link-frequencies = /bits/ 64 <493500000>;
+            };
+        };
+    };
+};

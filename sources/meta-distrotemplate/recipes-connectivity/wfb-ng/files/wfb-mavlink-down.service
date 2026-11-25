@@ -1,0 +1,15 @@
+[Unit]
+Description=MAVLink telemetry over WiFi broadcast (wfb-ng), drone to ground
+# The card is set up by wfb-video.service (monitor mode, channel, keys).
+After=wfb-video.service
+PartOf=wfb-video.service
+
+[Service]
+# Telemetry from mavlink-router (UDP 5610, see its main.conf) on radio port 16 (0x10).
+# Every packet goes out twice (FEC 1+1), at MCS 1 whatever the video uses.
+ExecStart=@@BINDIR@@/wfb_tx -K /run/wfb/drone.key -u 5610 -p 16 -B 20 -G long -S 0 -L 0 -M 1 -k 1 -n 2 wfb0
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=wfb-video.service
